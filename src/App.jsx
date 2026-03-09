@@ -6,8 +6,8 @@ import React, { useState, useMemo, createContext, useContext } from "react";
 
 const CERT_LEVELS  = ["None", "RO-P", "RO", "CRO", "RM", "Admin"];
 const SYSTEM_ROLES = ["member", "rm", "admin"];
-// Points per match role. MD and RM are separate when the match has distinct people;
-// MD/RM combined is used at small local matches where one person fills both roles.
+// Points per match role. MD and RM are separate by default.
+// MD/RM combined role is only available for Level I matches.
 // RO-P (Provisional) earns the same points as a full RO while working towards upgrade.
 const POINT_RULES  = { "RO-P": 1, RO: 1, CRO: 2, RM: 3, MD: 3, "MD/RM": 4 };
 
@@ -1990,7 +1990,7 @@ function MatchesPage({ users, matches, setMatches, regions }) {
   const [regionFilter, setRegionFilter] = useState("All");
   const [search,       setSearch]       = useState("");
 
-  const blank = { name:"", date:new Date().toISOString().slice(0,10), region:"", level:"Level I", discipline:"Handgun", stages:6, shooters:"", externalLink:"", status:"upcoming", combinedMDRM:true, md:"", mdText:"", rm:"", assignments:[] };
+  const blank = { name:"", date:new Date().toISOString().slice(0,10), region:"", level:"Level I", discipline:"Handgun", stages:6, shooters:"", externalLink:"", status:"upcoming", combinedMDRM:false, md:"", mdText:"", rm:"", assignments:[] };
   const [form, setForm] = useState(blank);
 
   const filtered = useMemo(()=>matches.filter(m=>{
@@ -2052,7 +2052,7 @@ function MatchesPage({ users, matches, setMatches, regions }) {
                   <Badge label={m.status} color={statusColor(m.status)} />
                   <Badge label={m.level}  color="#7c8cf8" />
                   {m.discipline && <Badge label={m.discipline} color="#0ea5e9" />}
-                  {!m.combinedMDRM && <Badge label="Sep. MD/RM" color="#94a3b8" />}
+
                 </div>
                 <div style={{color:"#475569",fontSize:13,display:"flex",gap:18,flexWrap:"wrap"}}>
                   <span>📅 {fmtDate(m.date)}</span><span>📍 {m.region}</span>
@@ -2081,7 +2081,7 @@ function MatchesPage({ users, matches, setMatches, regions }) {
             <Field label="District"><RegionSelect value={form.region} onChange={v=>setForm(f=>({...f,region:v}))} regions={regions} placeholder="— Select district —" /></Field>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-            <Field label="Level"><select style={inp} value={form.level} onChange={e=>setForm(f=>({...f,level:e.target.value}))}>{["Level I","Level II","Level III","Level IV"].map(l=><option key={l}>{l}</option>)}</select></Field>
+            <Field label="Level"><select style={inp} value={form.level} onChange={e=>{ const lv=e.target.value; setForm(f=>({...f,level:lv,combinedMDRM:lv==="Level I"?f.combinedMDRM:false})); }}>{["Level I","Level II","Level III","Level IV"].map(l=><option key={l}>{l}</option>)}</select></Field>
             <Field label="Discipline"><select style={inp} value={form.discipline||"Handgun"} onChange={e=>setForm(f=>({...f,discipline:e.target.value}))}>{IPSC_DISCIPLINES.map(d=><option key={d}>{d}</option>)}</select></Field>
             <Field label="Status"><select style={inp} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}><option>upcoming</option><option>active</option><option>completed</option></select></Field>
           </div>
@@ -2098,27 +2098,21 @@ function MatchesPage({ users, matches, setMatches, regions }) {
           {/* MD/RM section */}
           <div style={{background:"#111418",border:"1px solid #1e2530",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:"#e2e8f0"}}>Match Director / Rangemaster</div>
-                <div style={{fontSize:12,color:"#475569",marginTop:2}}>
-                  {form.combinedMDRM ? "One person fills both roles (typical for local/Level I matches)" : "Separate people for MD and RM (required for Level II+)"}
-                </div>
-              </div>
-              <button onClick={()=>setForm(f=>({...f,combinedMDRM:!f.combinedMDRM,rm:f.combinedMDRM?"":f.md}))} style={{
-                background:form.combinedMDRM?"#e85d2c22":"#1e2530",
-                border:`1px solid ${form.combinedMDRM?"#e85d2c55":"#2a3441"}`,
-                borderRadius:6, color:form.combinedMDRM?"#e85d2c":"#64748b",
-                padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap"
-              }}>{form.combinedMDRM?"Combined MD/RM":"Separate MD & RM"}</button>
+              <div style={{fontSize:13,fontWeight:600,color:"#e2e8f0"}}>Match Director / Rangemaster</div>
+              {/* Combine toggle: only available for Level I */}
+              {form.level==="Level I" && (
+                <button onClick={()=>setForm(f=>({...f,combinedMDRM:!f.combinedMDRM,md:"",rm:"",mdText:""}))} style={{
+                  background:form.combinedMDRM?"#e85d2c22":"#1e2530",
+                  border:`1px solid ${form.combinedMDRM?"#e85d2c55":"#2a3441"}`,
+                  borderRadius:6, color:form.combinedMDRM?"#e85d2c":"#64748b",
+                  padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap"
+                }}>{form.combinedMDRM?"✓ Combined MD/RM":"Combine MD/RM"}</button>
+              )}
             </div>
 
             {form.combinedMDRM ? (
-              // Combined: RM rules apply to the single person
-              <Field label="Match Director & Rangemaster" hint={
-                (form.level==="Level III"||form.level==="Level IV")
-                  ? "Level III/IV requires RM certification"
-                  : "Level I/II: RO certification or above required"
-              }>
+              // Combined: Level I only — one person fills both roles
+              <Field label="Match Director & Rangemaster" hint="Level I only — RO certification or above required">
                 <UserPicker
                   users={eligibleRMs(form.level)}
                   value={form.md}
@@ -2128,14 +2122,13 @@ function MatchesPage({ users, matches, setMatches, regions }) {
               </Field>
             ) : (
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-                {/* MD: any user or free text, or leave blank */}
                 <div>
-                  <Field label="Match Director (MD)" hint="Optional — MD is not required for NROI/IROA purposes">
+                  <Field label="Match Director (MD)">
                     <UserPicker
                       users={allActiveUsers}
                       value={form.md}
                       onChange={id => setForm(f=>({...f, md:id, mdText:""}))}
-                      placeholder="— Leave blank / type name —"
+                      placeholder="— Select MD —"
                       labelFn={u => u.certification && u.certification!=="None" ? `${u.name} (${u.certification})` : u.name}
                     />
                   </Field>
@@ -2143,7 +2136,6 @@ function MatchesPage({ users, matches, setMatches, regions }) {
                     <input style={{...inp,marginTop:-8}} value={form.mdText} onChange={e=>setForm(f=>({...f,mdText:e.target.value}))} placeholder="Or type MD name (external)…" />
                   )}
                 </div>
-                {/* RM: cert-filtered */}
                 <Field label="Rangemaster (RM)" hint={
                   (form.level==="Level III"||form.level==="Level IV")
                     ? "Level III/IV requires RM certification"
