@@ -2367,7 +2367,7 @@ function CompleteMatchModal({ match, users, onConfirm, onClose }) {
 }
 
 function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
-  const [tab,           setTab]          = useState("roster");
+  const T = THEMES[useTheme()];
   const [addROId,       setAddROId]       = useState("");
   const [addRole,       setAddRole]       = useState("RO");
   const [addStages,     setAddStages]     = useState("");
@@ -2398,8 +2398,6 @@ function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
   const rmUser = users.find(u=>u.id===match.rm);
   const mdName = mdUser?.name || match.mdText || null;
 
-  const tb = t=>({ padding:"8px 18px", fontSize:13, fontWeight:600, cursor:"pointer", border:"none", borderRadius:6,
-    background:tab===t?"#e85d2c":"transparent", color:tab===t?"#fff":"#64748b" });
 
   return (
     <Modal title={`${readonly?"View":"Manage"}: ${match.name}`} onClose={onClose} wide>
@@ -2426,11 +2424,24 @@ function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
         </div>
       </div>
 
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:20}}>
-        <StatCard label="ROs Assigned"   value={match.assignments.length}                                accent="#60a5fa" />
-        {match.shooters ? <StatCard label="Shooters" value={match.shooters} accent="#a78bfa" /> : null}
-        <StatCard label="Points to Give" value={match.assignments.reduce((s,a)=>s+a.pointsAwarded,0)}   accent="#e85d2c" />
-        {match.status==="completed" && match.dqList && <StatCard label="DQs" value={match.dqList.length} accent={match.dqList.length>0?"#f87171":"#4ade80"} />}
+      {/* Compact stat strip */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,alignItems:"center"}}>
+        <span style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#60a5fa"}}>
+          {match.assignments.length} RO{match.assignments.length!==1?"s":""} assigned
+        </span>
+        {match.shooters ? (
+          <span style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#a78bfa"}}>
+            {match.shooters} shooters
+          </span>
+        ) : null}
+        <span style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#e85d2c"}}>
+          {match.assignments.reduce((s,a)=>s+a.pointsAwarded,0)} pts to give
+        </span>
+        {match.status==="completed" && match.dqList && (
+          <span style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:match.dqList.length>0?"#f87171":"#4ade80"}}>
+            {match.dqList.length===0?"No DQs":`${match.dqList.length} DQ${match.dqList.length!==1?"s":""}`}
+          </span>
+        )}
       </div>
 
       {/* DQ + extra staff summary (completed matches) */}
@@ -2487,74 +2498,56 @@ function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
         />
       )}
 
-      <div style={{display:"flex",gap:4,marginBottom:20,background:"#0d1117",padding:4,borderRadius:8}}>
-        <button style={tb("roster")} onClick={()=>setTab("roster")}>RO Roster</button>
-        {!readonly&&<button style={tb("add")} onClick={()=>setTab("add")}>Add RO</button>}
-      </div>
-
-      {tab==="roster"&&(
-        <div>
-          {match.assignments.length===0&&<p style={{color:"#475569",fontSize:14}}>No ROs assigned yet.</p>}
-          {match.assignments.map(a=>{
-            const ro=users.find(u=>u.id===a.roId);
-            return (
-              <div key={a.roId} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid #1a2030"}}>
-                <div style={{flex:1}}>
-                  <div style={{color:"#e2e8f0",fontWeight:600,fontSize:14}}>{ro?.name||"Unknown"}</div>
-                  <div style={{color:"#475569",fontSize:12,marginTop:2}}>
-                    {ro?.certification}
-                    {a.stages&&a.stages.length>0 ? ` · Stages: ${a.stages.join(", ")}` : " · No specific stages"}
-                  </div>
-                </div>
-                <Badge label={a.role} color={certColor(a.role)} />
-                <span style={{color:"#e85d2c",fontWeight:800,fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,minWidth:40,textAlign:"right"}}>+{a.pointsAwarded} pts</span>
-                {!readonly&&<button onClick={()=>removeAssignment(a.roId)} style={{...btnD,padding:"4px 9px",fontSize:12}}>✕</button>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {tab==="add"&&!readonly&&(
-        <div>
-          {/* Point rules explanation, adjusted for combined/separate */}
-          <div style={{background:"#111418",border:"1px solid #1e2530",borderRadius:7,padding:"11px 14px",fontSize:12,color:"#64748b",marginBottom:18}}>
-            <strong style={{color:"#94a3b8"}}>Point awards for this match:</strong>
-            {match.combinedMDRM
-              ? " RO = 1 pt · CRO = 2 pts · RM = 3 pts · MD/RM (combined) = 4 pts"
-              : " RO = 1 pt · CRO = 2 pts · RM = 3 pts · MD = 3 pts · MD/RM (combined) = 4 pts"
-            }
-            {!match.combinedMDRM && (
-              <div style={{marginTop:6,color:"#475569"}}>
-                This match has <strong style={{color:"#e2e8f0"}}>separate MD and RM</strong>. Use the <Badge label="MD" color={certColor("MD")} /> role for the Match Director and <Badge label="RM" color={certColor("RM")} /> for the Rangemaster. Both receive 3 pts.
-              </div>
-            )}
+      {/* Add RO — always-visible compact form when editable */}
+      {!readonly && (
+        <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 14px",marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.textMuted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+            Add RO to Roster
+            <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:T.textFaint,fontSize:11}}>
+              {match.combinedMDRM ? "RO=1 · CRO=2 · RM=3 · MD/RM=4 pts" : "RO=1 · CRO=2 · RM/MD=3 · MD/RM=4 pts"}
+            </span>
           </div>
-          <Field label="Select Range Officer">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 110px 130px auto",gap:8,alignItems:"center"}}>
             <UserPicker
               users={availableROs}
               value={addROId}
               onChange={id => setAddROId(id)}
               placeholder="— Choose RO —"
             />
-          </Field>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <Field label="Role at Match">
-              <select style={inp} value={addRole} onChange={e=>setAddRole(e.target.value)}>
-                {roleOptions.map(r=><option key={r}>{r}</option>)}
-              </select>
-            </Field>
-            <Field label="Stages (comma-sep, optional)">
-              <input style={inp} value={addStages} onChange={e=>setAddStages(e.target.value)} placeholder="e.g. 1, 2, 5 — leave blank for MD/RM" />
-            </Field>
+            <select style={{...inp,margin:0}} value={addRole} onChange={e=>setAddRole(e.target.value)}>
+              {roleOptions.map(r=><option key={r}>{r}</option>)}
+            </select>
+            <input style={{...inp,margin:0}} value={addStages} onChange={e=>setAddStages(e.target.value)} placeholder="Stages (opt.)" title="Comma-separated, e.g. 1, 2, 5" />
+            <button style={{...btnP,whiteSpace:"nowrap",padding:"9px 14px"}} onClick={addAssignment} disabled={!addROId}>
+              + Add · <span style={{color:"#fbbf24"}}>{POINT_RULES[addRole]||1}pt</span>
+            </button>
           </div>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <button style={btnP} onClick={addAssignment} disabled={!addROId}>Add to Roster</button>
-            <span style={{color:"#94a3b8",fontSize:13}}>Will award: <span style={{color:"#e85d2c",fontWeight:700}}>{POINT_RULES[addRole]||1} pt{(POINT_RULES[addRole]||1)!==1?"s":""}</span></span>
-          </div>
-          {availableROs.length===0&&<p style={{color:"#475569",fontSize:13,marginTop:12}}>All eligible ROs are already assigned.</p>}
+          {availableROs.length===0 && <p style={{color:T.textFaint,fontSize:12,margin:"6px 0 0"}}>All eligible ROs are already assigned.</p>}
         </div>
       )}
+
+      {/* RO Roster */}
+      <div style={{fontSize:11,fontWeight:700,color:T.textMuted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>RO Roster</div>
+      <div>
+        {match.assignments.length===0&&<p style={{color:T.textFaint,fontSize:14}}>No ROs assigned yet.</p>}
+        {match.assignments.map(a=>{
+          const ro=users.find(u=>u.id===a.roId);
+          return (
+            <div key={a.roId} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{flex:1}}>
+                <div style={{color:T.textPrimary,fontWeight:600,fontSize:14}}>{ro?.name||"Unknown"}</div>
+                <div style={{color:T.textFaint,fontSize:12,marginTop:2}}>
+                  {ro?.certification}
+                  {a.stages&&a.stages.length>0 ? ` · Stages: ${a.stages.join(", ")}` : " · No specific stages"}
+                </div>
+              </div>
+              <Badge label={a.role} color={certColor(a.role)} />
+              <span style={{color:"#e85d2c",fontWeight:800,fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,minWidth:40,textAlign:"right"}}>+{a.pointsAwarded} pts</span>
+              {!readonly&&<button onClick={()=>removeAssignment(a.roId)} style={{...btnD,padding:"4px 9px",fontSize:12}}>✕</button>}
+            </div>
+          );
+        })}
+      </div>
     </Modal>
   );
 }
