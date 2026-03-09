@@ -9,6 +9,12 @@ const SYSTEM_ROLES = ["member", "rm", "admin"];
 // Points per match role. MD and RM are separate by default.
 // MD/RM combined role is only available for Level I matches.
 // RO-P (Provisional) earns the same points as a full RO while working towards upgrade.
+// Points are awarded per match level (NROI Handbook 2026, p.9), not per role.
+// Role determines cert-maintenance eligibility, not point value.
+const MATCH_LEVEL_POINTS = { "Level I": 1, "Level II": 2, "Level III": 3, "Level IV": 4, "Level V": 5 };
+const SEMINAR_INSTRUCTOR_POINTS = 3;  // IROA/NROI Level I or II seminar as instructor
+
+// Legacy role-based lookup kept only for display fallback
 const POINT_RULES  = { "RO-P": 1, RO: 1, CRO: 2, RM: 3, MD: 3, "MD/RM": 4 };
 
 const IPSC_DISCIPLINES = ["Handgun", "Rifle", "Shotgun", "Pistol Caliber Carbine", "Mini-Rifle"];
@@ -355,26 +361,26 @@ const seedUsers = [
 const seedMatches = [
   {
     // Small local match — one person is both MD and RM
-    id: "m1", name: "Oslo Club Match #12", date: "2025-11-15", region: "Oslo",
+    id: "m1", name: "Oslo Club Match #12", date: "2025-11-15", region: "Oslo", hostClubId: "c1",
     level: "Level I", stages: 6, status: "completed",
     combinedMDRM: true, md: "u1", rm: "u1",
     assignments: [
-      { roId: "u1", role: "MD/RM", stages: [1,2], pointsAwarded: 4 },
-      { roId: "u2", role: "CRO",   stages: [3,4], pointsAwarded: 2 },
+      { roId: "u1", role: "MD/RM", stages: [1,2], pointsAwarded: 1 },
+      { roId: "u2", role: "CRO",   stages: [3,4], pointsAwarded: 1 },
       { roId: "u3", role: "RO",    stages: [5,6], pointsAwarded: 1 },
     ]
   },
   {
     // Larger regional — separate MD and RM
-    id: "m2", name: "Bergen Regional 2025", date: "2025-12-01", region: "Bergen",
+    id: "m2", name: "Bergen Regional 2025", date: "2025-12-01", region: "Bergen", hostClubId: "c2",
     level: "Level II", stages: 12, status: "completed",
     combinedMDRM: false, md: "u4", rm: "u1",
     assignments: [
-      { roId: "u4", role: "MD",  stages: [],    pointsAwarded: 3 },
-      { roId: "u1", role: "RM",  stages: [],    pointsAwarded: 3 },
+      { roId: "u4", role: "MD",  stages: [],    pointsAwarded: 2 },
+      { roId: "u1", role: "RM",  stages: [],    pointsAwarded: 2 },
       { roId: "u2", role: "CRO", stages: [1,2], pointsAwarded: 2 },
-      { roId: "u5", role: "RO",  stages: [3,4], pointsAwarded: 1 },
-      { roId: "u3", role: "RO",  stages: [5,6], pointsAwarded: 1 },
+      { roId: "u5", role: "RO",  stages: [3,4], pointsAwarded: 2 },
+      { roId: "u3", role: "RO",  stages: [5,6], pointsAwarded: 2 },
     ]
   },
   {
@@ -384,6 +390,163 @@ const seedMatches = [
     assignments: []
   },
 ];
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLUBS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Club role tiers (scoped to each club)
+const CLUB_ROLES = ["member", "secretary", "president"];
+
+// Color helper for club roles
+function clubRoleColor(r) {
+  return { president:"#f97316", secretary:"#facc15", member:"#60a5fa" }[r] || "#9ca3af";
+}
+
+// Can this user manage a specific club? (secretary/president OR system admin)
+function canManageClub(currentUser, club) {
+  if (!currentUser || !club) return false;
+  if (currentUser.role === "admin") return true;
+  const m = (club.members||[]).find(m=>m.userId===currentUser.id&&m.status==="active");
+  return m && (m.role==="secretary"||m.role==="president");
+}
+function isClubPresident(currentUser, club) {
+  if (!currentUser || !club) return false;
+  if (currentUser.role === "admin") return true;
+  const m = (club.members||[]).find(m=>m.userId===currentUser.id&&m.status==="active");
+  return m && m.role==="president";
+}
+
+const seedClubs = [
+  {
+    id: "c1",
+    name: "Oslomarka Skytterlag",
+    shortName: "OSL",
+    region: "Oslo",
+    website: "https://oslomarka.no",
+    contactEmail: "post@oslomarka.no",
+    founded: "2001-03-10",
+    active: true,
+    description: "One of the largest IPSC clubs in Oslo, running weekly club matches and hosting regional competitions.",
+    members: [
+      { userId:"u1", role:"president", since:"2021-03-15", status:"active" },
+      { userId:"u3", role:"member",    since:"2023-02-20", status:"active" },
+      { userId:"u6", role:"secretary", since:"2019-06-22", status:"active" },
+      { userId:"u7", role:"member",    since:"2023-10-05", status:"active" },
+      { userId:"u16",role:"member",    since:"2024-01-12", status:"active" },
+    ]
+  },
+  {
+    id: "c2",
+    name: "Bergen Sportsskyttere",
+    shortName: "BSS",
+    region: "Bergen",
+    website: "",
+    contactEmail: "bergen.ipsc@example.com",
+    founded: "2005-09-01",
+    active: true,
+    description: "IPSC club based in Bergen, running monthly practical shooting competitions.",
+    members: [
+      { userId:"u2", role:"president", since:"2022-07-01", status:"active" },
+      { userId:"u5", role:"member",    since:"2023-09-10", status:"active" },
+      { userId:"u14",role:"secretary", since:"2022-11-01", status:"active" },
+    ]
+  },
+  {
+    id: "c3",
+    name: "Drammen Pistolklubb",
+    shortName: "DPK",
+    region: "Viken-Vest",
+    website: "",
+    contactEmail: "dpk@example.com",
+    founded: "2010-04-22",
+    active: true,
+    description: "Active club in the Drammen area hosting Level I matches and training days.",
+    members: [
+      { userId:"u9",  role:"president", since:"2020-01-10", status:"active" },
+      { userId:"u11", role:"secretary", since:"2021-05-14", status:"active" },
+    ]
+  },
+  {
+    id: "c4",
+    name: "Trondheim IPSC",
+    shortName: "TIPSC",
+    region: "Midt",
+    website: "",
+    contactEmail: "trondheim.ipsc@example.com",
+    founded: "2008-11-15",
+    active: true,
+    description: "The main IPSC club in the Trondheim area.",
+    members: [
+      { userId:"u10", role:"member", since:"2024-03-01", status:"active" },
+      { userId:"u18", role:"member", since:"2025-01-05", status:"active" },
+    ]
+  },
+];
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOCUMENTATION — constants & seed data
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DOC_CATEGORIES = ["NROI", "IROA", "IPSC", "Other"];
+
+function docCatColor(cat) {
+  return { NROI:"#f97316", IROA:"#38bdf8", IPSC:"#4ade80", Other:"#a78bfa" }[cat] || "#9ca3af";
+}
+
+function docTypeColor(ext) {
+  const e = (ext||"").toLowerCase();
+  if (e==="pdf")                         return "#f87171";
+  if (e==="doc"||e==="docx")             return "#60a5fa";
+  if (e==="xls"||e==="xlsx")             return "#4ade80";
+  if (e==="ppt"||e==="pptx")             return "#fb923c";
+  if (["png","jpg","jpeg","gif","webp"].includes(e)) return "#c084fc";
+  return "#94a3b8";
+}
+
+function fmtFileSize(bytes) {
+  if (!bytes) return "—";
+  if (bytes < 1024)    return bytes + " B";
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + " KB";
+  return (bytes/1048576).toFixed(1) + " MB";
+}
+
+// Seed documents — stored as plain-text blobs so download works without a server
+const seedDocs = (() => {
+  function make(id, name, category, description, ext, uploadedByName, date, body) {
+    return { id, name, category, description, fileType:ext,
+             fileSize: body.length, uploadedByName, uploadDate: date,
+             dataUrl: "data:text/plain;charset=utf-8," + encodeURIComponent(body) };
+  }
+  return [
+    make("d1","NROI RO Handbook 2024.pdf","NROI",
+      "Official NROI handbook covering RO duties, procedures and match etiquette.",
+      "pdf","Erik Haugen","2024-01-15",
+      "NROI Range Officer Handbook\n\n1. INTRODUCTION\nRange Officers are essential to safe and fair competition.\n\n2. DUTIES\n- Safety oversight at all times\n- Stage preparation and reset\n- Competitor briefings before each run\n- Scoring assistance\n\n3. PROCEDURES\nAll ROs must follow the current IPSC rulebook and NROI guidelines at all times.\n\nVersion 2024.1"),
+    make("d2","IROA Level I Curriculum.pdf","IROA",
+      "Curriculum and learning objectives for IROA Level I seminars.",
+      "pdf","Erik Haugen","2024-02-20",
+      "IROA Level I Seminar Curriculum\n\nLearning Objectives:\n1. IPSC safety rules\n2. Stage setup and reset\n3. Competitor briefing techniques\n4. Score verification\n5. DQ procedures\n\nDuration: 1 day (8 hours)\nExam: Written + practical assessment"),
+    make("d3","IPSC Combined Competition Rules Jan 2026.pdf","IPSC",
+      "Full IPSC Combined Competition Rules, effective January 2026.",
+      "pdf","Erik Haugen","2026-01-05",
+      "IPSC Combined Competition Rules — January 2026\n\nChapter 1  Competitor Requirements\nChapter 2  Course Design\nChapter 3  Scoring\nChapter 4  Range Commands\nChapter 5  Penalties\nChapter 6  Targets\nChapter 7  Equipment\nChapter 8  Malfunctions\nChapter 9  Appeals\nChapter 10 Disqualifications\n\n© IPSC 2026"),
+    make("d4","NROI Match Director Checklist.docx","NROI",
+      "Pre-match and day-of checklist for Match Directors running NROI-sanctioned competitions.",
+      "docx","Anna Solberg","2025-03-10",
+      "NROI Match Director Checklist\n\nPRE-MATCH (1 week before)\n[ ] Confirm range booking\n[ ] Submit match to NROI calendar\n[ ] Assign RO staff\n[ ] Order targets and supplies\n\nDAY BEFORE\n[ ] Brief all ROs\n[ ] Set up stages\n[ ] Test timing equipment\n\nMATCH DAY\n[ ] Safety briefing\n[ ] Open registration\n\nPOST-MATCH\n[ ] Submit results to NROI\n[ ] File incident reports if any"),
+    make("d5","IPSC Handgun Equipment Rules 2025.pdf","IPSC",
+      "Equipment specifications and legal requirements for the IPSC Handgun division.",
+      "pdf","Erik Haugen","2025-06-01",
+      "IPSC Handgun Division Equipment Rules 2025\n\nOpen: No restrictions, min 9mm, PF 160 Major\nStandard: No optics, 15+1 max, PF 125 Minor\nProduction: Factory guns, 10+1 max, PF 125 Minor\nProduction Optics: As Production with optic sight\nClassic: 1911-style, 8+1 max\nRevolver: Double-action revolvers, 6 rounds\n\nSee full rules at ipsc.org"),
+    make("d6","NROI Contacts 2026.xlsx","NROI",
+      "Contact information for NROI board members and regional representatives.",
+      "xlsx","Anna Solberg","2026-01-20",
+      "NROI Contact List 2026\n\nNational Board\nPresident        [on file]\nVice President   [on file]\nSecretary        [on file]\n\nRegional Representatives\nOslo             [on file]\nBergen           [on file]\nNord             [on file]\nMidt             [on file]\nSør              [on file]"),
+  ];
+})();
 
 const AuthCtx  = createContext(null);
 function useAuth()  { return useContext(AuthCtx); }
@@ -951,7 +1114,7 @@ function Dashboard({ users, matches, seminars }) {
 // MY PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MyProfile({ users, setUsers, matches, seminars, regions, applications, setApplications }) {
+function MyProfile({ users, setUsers, matches, seminars, regions, applications, setApplications, clubs, setClubs }) {
   const { currentUser, setCurrentUser } = useAuth();
   const user = users.find(u=>u.id===currentUser.id) || currentUser;
 
@@ -975,6 +1138,15 @@ function MyProfile({ users, setUsers, matches, seminars, regions, applications, 
   const myApplications = useMemo(()=>
     (applications||[]).filter(a=>a.userId===user.id)
       .sort((a,b)=>new Date(b.date)-new Date(a.date))
+  ,[applications,user.id]);
+
+  const myClubs = useMemo(()=>
+    (clubs||[]).filter(c=>(c.members||[]).some(m=>m.userId===user.id&&m.status==="active"))
+      .map(c=>({ ...c, membership:(c.members||[]).find(m=>m.userId===user.id) }))
+  ,[clubs,user.id]);
+
+  const myPendingClubApps = useMemo(()=>
+    (applications||[]).filter(a=>a.type==="club_membership"&&a.userId===user.id&&a.status==="pending")
   ,[applications,user.id]);
 
   // Which cert/IROA types already have a pending application?
@@ -1034,6 +1206,7 @@ function MyProfile({ users, setUsers, matches, seminars, regions, applications, 
             <div style={{display:"flex",gap:10,marginBottom:20}}>
               <StatCard label="Points"  value={user.points}       accent="#e85d2c" />
               <StatCard label="Matches" value={myMatches.length}  accent="#60a5fa" />
+              <StatCard label="Clubs"   value={myClubs.length}   accent="#7c8cf8" />
             </div>
             {!editMode ? (
               <>
@@ -1113,7 +1286,7 @@ function MyProfile({ users, setUsers, matches, seminars, regions, applications, 
 
           {/* RO Upgrade Checklist — only shown for RO-P holders */}
           {user.certification==="RO-P" && (()=>{
-            const checklist = computeROChecklist(user);
+            const checklist = computeROChecklist(user, matches);
             const allPass   = checklist.every(c=>c.pass);
             return (
               <div style={{background:"var(--surface2)",border:`1px solid ${allPass?"#4ade8066":"var(--border)"}`,borderRadius:8,padding:24,marginBottom:16}}>
@@ -1161,6 +1334,41 @@ function MyProfile({ users, setUsers, matches, seminars, regions, applications, 
           {/* Certification upgrade applications — CRO, RM, IROA */}
           <CertApplicationPanel user={user} pendingTypes={pendingTypes} submitApplication={submitApplication} />
 
+          {/* Club memberships */}
+          {(myClubs.length > 0 || myPendingClubApps.length > 0) && (
+            <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:8,padding:24,marginBottom:16}}>
+              <h3 style={{margin:"0 0 14px",fontSize:13,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Club Memberships</h3>
+              {myClubs.map(c=>(
+                <div key={c.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+                  <div style={{width:36,height:36,borderRadius:8,background:"#e85d2c",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff",letterSpacing:"0.05em",fontFamily:"'Barlow Condensed',sans-serif",flexShrink:0}}>
+                    {c.shortName.slice(0,3)}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{color:"var(--text-primary)",fontWeight:600,fontSize:14}}>{c.name}</div>
+                    <div style={{fontSize:12,color:"var(--text-faint)",marginTop:2}}>
+                      {c.region} · Member since {fmtDate(c.membership?.since)}
+                    </div>
+                  </div>
+                  <Badge label={c.membership?.role||"member"} color={clubRoleColor(c.membership?.role)} />
+                </div>
+              ))}
+              {myPendingClubApps.map(a=>{
+                const club = (clubs||[]).find(c=>c.id===a.clubId);
+                return (
+                  <div key={a.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid var(--border)",opacity:0.7}}>
+                    <div style={{width:36,height:36,borderRadius:8,background:"var(--surface3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"var(--text-faint)",fontFamily:"'Barlow Condensed',sans-serif",flexShrink:0}}>
+                      {(club?.shortName||"?").slice(0,3)}
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{color:"var(--text-primary)",fontWeight:600,fontSize:14}}>{club?.name||"Unknown Club"}</div>
+                      <div style={{fontSize:12,color:"var(--text-faint)",marginTop:2}}>Applied {fmtDate(a.date)}</div>
+                    </div>
+                    <Badge label="⏳ pending" color="#60a5fa" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {/* My application history */}
           {myApplications.length > 0 && (
             <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:8,padding:24,marginBottom:16}}>
@@ -1170,7 +1378,10 @@ function MyProfile({ users, setUsers, matches, seminars, regions, applications, 
                   <div style={{flex:1}}>
                     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                       <span style={{fontWeight:600,color:"var(--text-primary)",fontSize:13}}>
-                        {app.type==="IROA" ? "IROA Membership" : `${app.type} Certification`}
+                        {app.type==="IROA" ? "IROA Membership"
+                          : app.type==="club_membership"
+                            ? `Club Membership: ${(clubs||[]).find(c=>c.id===app.clubId)?.name||"Unknown Club"}`
+                            : `${app.type} Certification`}
                       </span>
                       <Badge
                         label={app.status}
@@ -1333,7 +1544,7 @@ function CertApplicationPanel({ user, pendingTypes, submitApplication }) {
 // ADMIN: USER DATABASE
 // ─────────────────────────────────────────────────────────────────────────────
 
-function UserDatabase({ users, setUsers, regions, setRegions, applications, setApplications }) {
+function UserDatabase({ users, setUsers, regions, setRegions, applications, setApplications, matches }) {
   const { currentUser } = useAuth();
   const adminAccess = isAdmin(currentUser);
   const [tab,          setTab]          = useState("users");  // "users" | "apps" | "regions"
@@ -1521,6 +1732,7 @@ function UserDatabase({ users, setUsers, regions, setRegions, applications, setA
         <ApplicationsTab
           applications={applications}
           users={users}
+          matches={matches}
           currentUser={currentUser}
           onApprove={approveApplication}
           onReject={rejectApplication}
@@ -1753,7 +1965,7 @@ function GrantCertModal({ user, granterName, onClose, onSave }) {
 // APPLICATIONS TAB  (used inside UserDatabase)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ApplicationsTab({ applications, users, currentUser, onApprove, onReject }) {
+function ApplicationsTab({ applications, users, matches, currentUser, onApprove, onReject }) {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [reviewingId,  setReviewingId]  = useState(null);
   const [reviewNote,   setReviewNote]   = useState("");
@@ -1762,7 +1974,7 @@ function ApplicationsTab({ applications, users, currentUser, onApprove, onReject
     .filter(a => statusFilter==="all" || a.status===statusFilter)
     .sort((a,b)=>new Date(b.date)-new Date(a.date));
 
-  const appTypeColor = t => ({RO:"#4ade80",CRO:"#facc15",RM:"#f97316",IROA:"#38bdf8"})[t]||"#9ca3af";
+  const appTypeColor = t => ({RO:"#4ade80",CRO:"#facc15",RM:"#f97316",IROA:"#38bdf8",club_membership:"#7c8cf8"})[t]||"#9ca3af";
 
   function handleApprove(app) {
     onApprove(app, reviewNote);
@@ -1806,7 +2018,11 @@ function ApplicationsTab({ applications, users, currentUser, onApprove, onReject
                   <div style={{flex:1,minWidth:200}}>
                     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:4}}>
                       <span style={{fontWeight:700,color:"var(--text-primary)",fontSize:14}}>{applicant?.name||app.userName}</span>
-                      <Badge label={`Apply: ${app.type}`} color={appTypeColor(app.type)} />
+                      <Badge label={app.type==="club_membership" ? "Club Membership" : `Apply: ${app.type}`} color={appTypeColor(app.type)} />
+                      {app.clubId && app.type==="club_membership" && (()=>{
+                        // Note: clubs not in scope here — show clubId as fallback
+                        return null;
+                      })()}
                       <Badge label={app.status} color={app.status==="pending"?"#60a5fa":app.status==="approved"?"#4ade80":"#f87171"} />
                     </div>
                     <div style={{fontSize:12,color:"var(--text-faint)",display:"flex",gap:14,flexWrap:"wrap"}}>
@@ -1823,7 +2039,7 @@ function ApplicationsTab({ applications, users, currentUser, onApprove, onReject
                     )}
                     {/* Show automated RO checklist inline for RO applications */}
                     {app.type==="RO" && app.status==="pending" && applicant && (()=>{
-                      const checklist = computeROChecklist(applicant);
+                      const checklist = computeROChecklist(applicant, matches);
                       const allPass   = checklist.every(c=>c.pass);
                       return (
                         <div style={{marginTop:10,padding:"10px 12px",background:"var(--surface)",borderRadius:7,border:"1px solid var(--border)"}}>
@@ -2022,7 +2238,7 @@ function ROPage({ users, matches, regions }) {
 // MATCHES PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MatchesPage({ users, matches, setMatches, regions }) {
+function MatchesPage({ users, matches, setMatches, regions, clubs }) {
   const { currentUser } = useAuth();
   const canEdit = canManageMatches(currentUser);
 
@@ -2032,7 +2248,7 @@ function MatchesPage({ users, matches, setMatches, regions }) {
   const [regionFilter, setRegionFilter] = useState("All");
   const [search,       setSearch]       = useState("");
 
-  const blank = { name:"", date:new Date().toISOString().slice(0,10), region:"", level:"Level I", discipline:"Handgun", stages:6, shooters:"", externalLink:"", status:"upcoming", combinedMDRM:false, md:"", mdText:"", rm:"", assignments:[] };
+  const blank = { name:"", date:new Date().toISOString().slice(0,10), region:"", level:"Level I", discipline:"Handgun", stages:6, shooters:"", externalLink:"", status:"upcoming", combinedMDRM:false, md:"", mdText:"", rm:"", assignments:[], hostClubId:"" };
   const [form,        setForm]       = useState(blank);
   const [formErrors,  setFormErrors] = useState({});
 
@@ -2113,6 +2329,7 @@ function MatchesPage({ users, matches, setMatches, regions }) {
                   <span>🎯 {m.stages} stages</span>
                   {m.shooters ? <span>🔫 {m.shooters} shooters</span> : null}
                   <span>👔 {staffLabel}</span>
+                  {m.hostClubId && (()=>{ const cl=(clubs||[]).find(c=>c.id===m.hostClubId); return cl?<span>🏛️ {cl.shortName}</span>:null; })()}
                   <span>👥 {m.assignments.length} RO{m.assignments.length!==1?"s":""}</span>
                   {m.externalLink && <a href={m.externalLink} target="_blank" rel="noopener noreferrer" style={{color:"#60a5fa",textDecoration:"none"}} onClick={e=>e.stopPropagation()}>🔗 Match page</a>}
                 </div>
@@ -2146,6 +2363,12 @@ function MatchesPage({ users, matches, setMatches, regions }) {
             </Field>
             <Field label="External Link (optional)" hint="Match page, registration, or results URL">
               <input style={inp} type="url" value={form.externalLink} onChange={e=>setForm(f=>({...f,externalLink:e.target.value}))} placeholder="https://practiscore.com/…" />
+            </Field>
+            <Field label="Host Club (optional)" hint="Club organising or hosting this match">
+              <select style={inp} value={form.hostClubId||""} onChange={e=>setForm(f=>({...f,hostClubId:e.target.value}))}>
+                <option value="">— No club host —</option>
+                {(clubs||[]).filter(c=>c.active).sort((a,b)=>a.name.localeCompare(b.name)).map(c=><option key={c.id} value={c.id}>{c.name} ({c.shortName})</option>)}
+              </select>
             </Field>
           </div>
 
@@ -2217,7 +2440,7 @@ function MatchesPage({ users, matches, setMatches, regions }) {
       )}
 
       {manageMatch&&(
-        <ManageMatch match={manageMatch} users={users} readonly={!canEdit}
+        <ManageMatch match={manageMatch} users={users} clubs={clubs} readonly={!canEdit}
           onClose={()=>setManageMatch(null)}
           onUpdate={upd=>{setMatches(prev=>prev.map(m=>m.id===upd.id?upd:m));setManageMatch(upd);}}
         />
@@ -2415,7 +2638,7 @@ function CompleteMatchModal({ match, users, onConfirm, onClose }) {
   );
 }
 
-function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
+function ManageMatch({ match, users, clubs, readonly, onClose, onUpdate }) {
   const [addROId,       setAddROId]       = useState("");
   const [addRole,       setAddRole]       = useState("RO");
   const [addStages,     setAddStages]     = useState("");
@@ -2435,7 +2658,8 @@ function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
     if (!addROId) { setAddROErr(true); return; }
     setAddROErr(false);
     const stages=addStages.split(",").map(s=>parseInt(s.trim())).filter(n=>!isNaN(n));
-    onUpdate({...match,assignments:[...match.assignments,{roId:addROId,role:addRole,stages,pointsAwarded:POINT_RULES[addRole]||1}]});
+    const levelPts = MATCH_LEVEL_POINTS[match.level] || 1;
+    onUpdate({...match,assignments:[...match.assignments,{roId:addROId,role:addRole,stages,pointsAwarded:levelPts}]});
     setAddROId(""); setAddStages("");
   }
   function removeAssignment(id) { onUpdate({...match,assignments:match.assignments.filter(a=>a.roId!==id)}); }
@@ -2461,6 +2685,7 @@ function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
           <span style={{color:"var(--text-muted)"}}><Badge label={match.level} color="#7c8cf8" /></span>
           {match.discipline && <Badge label={match.discipline} color="#0ea5e9" />}
           {match.externalLink && <a href={match.externalLink} target="_blank" rel="noopener noreferrer" style={{color:"#60a5fa",fontSize:13,textDecoration:"none",display:"flex",alignItems:"center",gap:4}}>🔗 Match page ↗</a>}
+          {match.hostClubId && clubs && (()=>{ const cl=clubs.find(c=>c.id===match.hostClubId); return cl?<span style={{color:"var(--text-muted)"}}>🏛️ <span style={{color:"var(--text-primary)",fontWeight:600}}>{cl.name}</span></span>:null; })()}
         </div>
         <div style={{marginTop:12,display:"flex",gap:24,flexWrap:"wrap",fontSize:13}}>
           {match.combinedMDRM ? (
@@ -2497,7 +2722,7 @@ function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
             </select>
             <input style={{...inp,margin:0}} value={addStages} onChange={e=>setAddStages(e.target.value)} placeholder="Stages (opt.)" title="Comma-separated, e.g. 1, 2, 5" />
             <button style={{...btnP,whiteSpace:"nowrap",padding:"9px 14px"}} onClick={addAssignment} disabled={!addROId}>
-              + Add · <span style={{color:"#fbbf24"}}>{POINT_RULES[addRole]||1}pt</span>
+              + Add · <span style={{color:"#fbbf24"}}>{MATCH_LEVEL_POINTS[match.level]||1}pt (L{["I","II","III","IV","V"][["Level I","Level II","Level III","Level IV","Level V"].indexOf(match.level)]})</span>
             </button>
           </div>
           {availableROs.length===0 && <p style={{color:"var(--text-faint)",fontSize:12,margin:"6px 0 0"}}>All eligible ROs are already assigned.</p>}
@@ -2609,6 +2834,891 @@ function ManageMatch({ match, users, readonly, onClose, onUpdate }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CLUBS PAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ClubsPage({ users, clubs, setClubs, applications, setApplications, matches, regions }) {
+  const { currentUser } = useAuth();
+  const admin = isAdmin(currentUser);
+
+  const [search,     setSearch]     = useState("");
+  const [regionFilt, setRegionFilt] = useState("All");
+  const [detail,     setDetail]     = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createFe,   setCreateFe]   = useState({});
+  const [createForm, setCreateForm] = useState({ name:"", shortName:"", region:"", website:"", contactEmail:"", founded:"", description:"" });
+
+  const filtered = clubs.filter(c => {
+    const q = search.toLowerCase();
+    return (c.name.toLowerCase().includes(q) || c.shortName.toLowerCase().includes(q))
+      && (regionFilt === "All" || c.region === regionFilt);
+  });
+
+  // Membership helpers for current user
+  function myMembership(club) {
+    return (club.members||[]).find(m=>m.userId===currentUser.id&&m.status==="active");
+  }
+  function hasPendingApp(clubId) {
+    return (applications||[]).some(a=>a.type==="club_membership"&&a.clubId===clubId&&a.userId===currentUser.id&&a.status==="pending");
+  }
+
+  function applyMembership(clubId) {
+    const app = {
+      id:"app"+Date.now(), userId:currentUser.id, userName:currentUser.name,
+      userCert:currentUser.certification, userRegion:currentUser.region,
+      type:"club_membership", clubId, date:new Date().toISOString().slice(0,10),
+      note:"", status:"pending", reviewedBy:null, reviewedDate:null, reviewNote:""
+    };
+    setApplications(prev=>[...prev,app]);
+  }
+
+  function createClub() {
+    const errs = {};
+    if (!createForm.name.trim())      errs.name      = true;
+    if (!createForm.shortName.trim()) errs.shortName = true;
+    if (!createForm.region)           errs.region    = true;
+    if (Object.keys(errs).length) { setCreateFe(errs); return; }
+    const club = {
+      ...createForm,
+      id: "c"+(clubs.length+1)+(Date.now()%10000),
+      active: true,
+      members: [{ userId:currentUser.id, role:"president", since:new Date().toISOString().slice(0,10), status:"active" }]
+    };
+    setClubs(prev=>[...prev,club]);
+    setShowCreate(false);
+    setCreateForm({ name:"", shortName:"", region:"", website:"", contactEmail:"", founded:"", description:"" });
+    setCreateFe({});
+    setDetail(club);
+  }
+
+  return (
+    <div style={{padding:"28px 32px", maxWidth:980}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
+        <div>
+          <h1 style={{margin:"0 0 4px",fontSize:26,fontWeight:800,color:"var(--text-primary)",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:"0.04em"}}>Clubs</h1>
+          <p style={{margin:0,color:"var(--text-muted)",fontSize:14}}>{clubs.length} registered club{clubs.length!==1?"s":""} · apply for membership or manage your club</p>
+        </div>
+        <button style={{...btnP,padding:"10px 18px"}} onClick={()=>{setShowCreate(true);setCreateFe({});}}>+ Register Club</button>
+      </div>
+
+      {/* Filters */}
+      <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search clubs…" style={{...inp,flex:1,minWidth:180}} />
+        <select style={{...inp,width:160}} value={regionFilt} onChange={e=>setRegionFilt(e.target.value)}>
+          <option value="All">All Districts</option>
+          {[...new Set(clubs.map(c=>c.region))].sort().map(r=><option key={r}>{r}</option>)}
+        </select>
+      </div>
+
+      {/* Club cards */}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {filtered.map(club => {
+          const membership = myMembership(club);
+          const pending    = hasPendingApp(club.id);
+          const canManage  = canManageClub(currentUser, club);
+          const matchCount = (matches||[]).filter(m=>m.hostClubId===club.id).length;
+
+          return (
+            <div key={club.id} style={{
+              background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,
+              padding:"16px 20px",display:"flex",alignItems:"center",gap:16
+            }}>
+              {/* Club avatar */}
+              <div style={{
+                width:46,height:46,borderRadius:10,background:"#e85d2c",flexShrink:0,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:14,fontWeight:800,color:"#fff",letterSpacing:"0.05em",fontFamily:"'Barlow Condensed',sans-serif"
+              }}>{club.shortName.slice(0,3)}</div>
+
+              <div style={{flex:1}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
+                  <span style={{fontWeight:700,fontSize:15,color:"var(--text-primary)"}}>{club.name}</span>
+                  <Badge label={club.shortName} color="#7c8cf8" />
+                  <Badge label={club.region}    color="var(--text-faint)" />
+                  {membership && <Badge label={membership.role} color={clubRoleColor(membership.role)} />}
+                  {canManage  && <Badge label="⚙ Admin" color="#a855f7" />}
+                </div>
+                <div style={{fontSize:12,color:"var(--text-muted)",display:"flex",gap:14,flexWrap:"wrap"}}>
+                  <span>👥 {(club.members||[]).filter(m=>m.status==="active").length} member{(club.members||[]).filter(m=>m.status==="active").length!==1?"s":""}</span>
+                  {matchCount>0 && <span>🎯 {matchCount} match{matchCount!==1?"es":""} hosted</span>}
+                  {club.website && <a href={club.website} target="_blank" rel="noopener noreferrer" style={{color:"#60a5fa",textDecoration:"none"}}>🔗 Website</a>}
+                </div>
+                {club.description && <div style={{fontSize:12,color:"var(--text-faint)",marginTop:4,fontStyle:"italic",maxWidth:560}}>{club.description.length>100?club.description.slice(0,100)+"…":club.description}</div>}
+              </div>
+
+              <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
+                {!membership && !pending && (
+                  <button style={{...btnS,padding:"7px 14px",fontSize:13}} onClick={()=>applyMembership(club.id)}>Apply to Join</button>
+                )}
+                {!membership && pending && (
+                  <span style={{fontSize:12,color:"#60a5fa",padding:"7px 12px"}}>⏳ Application pending</span>
+                )}
+                {membership && !canManage && (
+                  <span style={{fontSize:12,color:"#4ade80",padding:"7px 12px"}}>✓ Member</span>
+                )}
+                <button style={{...btnP,padding:"7px 14px",fontSize:13}} onClick={()=>setDetail(club)}>
+                  {canManage ? "Manage" : "View"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length===0 && <div style={{textAlign:"center",padding:60,color:"var(--text-faint)"}}>No clubs found.</div>}
+      </div>
+
+      {/* Create Club Modal */}
+      {showCreate && (
+        <Modal title="Register New Club" onClose={()=>{setShowCreate(false);setCreateFe({});}}>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16}}>
+            <Field label="Club Name">
+              <input style={errInp(createFe.name)} value={createForm.name}
+                onChange={e=>{setCreateForm(f=>({...f,name:e.target.value}));setCreateFe(p=>({...p,name:false}));}}
+                placeholder="e.g. Oslo Pistolklubb" />
+            </Field>
+            <Field label="Short Name / Abbreviation">
+              <input style={errInp(createFe.shortName)} value={createForm.shortName}
+                onChange={e=>{setCreateForm(f=>({...f,shortName:e.target.value.toUpperCase()}));setCreateFe(p=>({...p,shortName:false}));}}
+                placeholder="e.g. OPK" maxLength={6} />
+            </Field>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Field label="District">
+              <RegionSelect value={createForm.region} onChange={v=>{setCreateForm(f=>({...f,region:v}));setCreateFe(p=>({...p,region:false}));}}
+                regions={regions} placeholder="— Select district —" hasError={createFe.region} />
+            </Field>
+            <Field label="Founded (optional)">
+              <input style={inp} type="date" value={createForm.founded} onChange={e=>setCreateForm(f=>({...f,founded:e.target.value}))} />
+            </Field>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Field label="Website (optional)">
+              <input style={inp} type="url" value={createForm.website} onChange={e=>setCreateForm(f=>({...f,website:e.target.value}))} placeholder="https://…" />
+            </Field>
+            <Field label="Contact Email (optional)">
+              <input style={inp} type="email" value={createForm.contactEmail} onChange={e=>setCreateForm(f=>({...f,contactEmail:e.target.value}))} placeholder="info@club.no" />
+            </Field>
+          </div>
+          <Field label="Description (optional)">
+            <textarea style={{...inp,height:72,resize:"vertical"}} value={createForm.description}
+              onChange={e=>setCreateForm(f=>({...f,description:e.target.value}))} placeholder="Brief description of the club…" />
+          </Field>
+          <div style={{background:"#60a5fa11",border:"1px solid #60a5fa33",borderRadius:7,padding:"10px 14px",fontSize:12,color:"var(--text-muted)",marginBottom:8}}>
+            You will be added as <Badge label="president" color="#f97316" /> of this club.
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={btnS} onClick={()=>{setShowCreate(false);setCreateFe({});}}>Cancel</button>
+            <button style={btnP} onClick={createClub}>Register Club</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Club Detail Modal */}
+      {detail && (
+        <ClubDetailModal
+          club={clubs.find(c=>c.id===detail.id)||detail}
+          users={users}
+          currentUser={currentUser}
+          applications={applications}
+          setApplications={setApplications}
+          matches={matches}
+          onClose={()=>setDetail(null)}
+          onUpdate={updated=>setClubs(prev=>prev.map(c=>c.id===updated.id?updated:c))}
+          isAdmin={admin}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLUB DETAIL MODAL
+// Tabs: Info | Members | Applications (club admins) | Matches
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ClubDetailModal({ club, users, currentUser, applications, setApplications, matches, onClose, onUpdate, isAdmin: sysAdmin }) {
+  const [tab,        setTab]        = useState("info");
+  const [editMode,   setEditMode]   = useState(false);
+  const [editForm,   setEditForm]   = useState({ name:club.name, shortName:club.shortName, website:club.website||"", contactEmail:club.contactEmail||"", description:club.description||"" });
+  const [editFe,     setEditFe]     = useState({});
+  const [reviewingId,setReviewingId]= useState(null);
+  const [reviewNote, setReviewNote] = useState("");
+
+  const canManage = canManageClub(currentUser, club);
+  const isPresident = isClubPresident(currentUser, club);
+
+  const activeMembers = (club.members||[]).filter(m=>m.status==="active");
+  const pendingApps   = (applications||[]).filter(a=>a.type==="club_membership"&&a.clubId===club.id&&a.status==="pending");
+  const hostMatches   = (matches||[]).filter(m=>m.hostClubId===club.id);
+
+  function saveEdit() {
+    const errs = {};
+    if (!editForm.name.trim())      errs.name      = true;
+    if (!editForm.shortName.trim()) errs.shortName = true;
+    if (Object.keys(errs).length) { setEditFe(errs); return; }
+    setEditFe({});
+    onUpdate({ ...club, ...editForm });
+    setEditMode(false);
+  }
+
+  function approveApp(app) {
+    // Add to club members
+    const newMember = { userId:app.userId, role:"member", since:new Date().toISOString().slice(0,10), status:"active" };
+    onUpdate({ ...club, members:[...(club.members||[]), newMember] });
+    // Update application status
+    setApplications(prev=>prev.map(a=>a.id===app.id
+      ? {...a, status:"approved", reviewedBy:currentUser.name, reviewedDate:new Date().toISOString().slice(0,10), reviewNote}
+      : a
+    ));
+    setReviewingId(null); setReviewNote("");
+  }
+
+  function rejectApp(app) {
+    setApplications(prev=>prev.map(a=>a.id===app.id
+      ? {...a, status:"rejected", reviewedBy:currentUser.name, reviewedDate:new Date().toISOString().slice(0,10), reviewNote}
+      : a
+    ));
+    setReviewingId(null); setReviewNote("");
+  }
+
+  function setMemberRole(userId, newRole) {
+    onUpdate({ ...club, members:(club.members||[]).map(m=>m.userId===userId?{...m,role:newRole}:m) });
+  }
+
+  function suspendMember(userId) {
+    onUpdate({ ...club, members:(club.members||[]).map(m=>m.userId===userId?{...m,status:"suspended"}:m) });
+  }
+
+  function reinstateMember(userId) {
+    onUpdate({ ...club, members:(club.members||[]).map(m=>m.userId===userId?{...m,status:"active"}:m) });
+  }
+
+  function removeMember(userId) {
+    if (!window.confirm("Remove this member from the club?")) return;
+    onUpdate({ ...club, members:(club.members||[]).filter(m=>m.userId!==userId) });
+  }
+
+  const TABS = [
+    { id:"info",     label:"Info" },
+    { id:"members",  label:`Members (${activeMembers.length})` },
+    canManage && pendingApps.length > 0 && { id:"apps", label:`Applications (${pendingApps.length})`, accent:true },
+    canManage && { id:"apps", label:`Applications${pendingApps.length>0?" ("+pendingApps.length+")":""}`, accent:pendingApps.length>0 },
+    { id:"matches",  label:`Matches (${hostMatches.length})` },
+  ].filter(Boolean);
+
+  // Dedupe tabs (apps appears twice due to conditional logic above)
+  const seenIds = new Set();
+  const uniqueTabs = TABS.filter(t=>{ if(seenIds.has(t.id)){return false;} seenIds.add(t.id); return true; });
+
+  const tabStyle = t => ({
+    background:"none", border:"none",
+    borderBottom: tab===t.id ? "2px solid #e85d2c" : "2px solid transparent",
+    color: tab===t.id ? "var(--text-primary)" : "var(--text-muted)",
+    padding:"9px 16px", cursor:"pointer", fontSize:13, fontWeight:tab===t.id?700:400,
+    marginBottom:-1, whiteSpace:"nowrap",
+    ...(t.accent && tab!==t.id ? {color:"#e85d2c"} : {})
+  });
+
+  return (
+    <Modal title={club.name} onClose={onClose} wide>
+      {/* Club header strip */}
+      <div style={{display:"flex",gap:16,alignItems:"center",marginBottom:20,padding:"14px 18px",background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:8}}>
+        <div style={{width:52,height:52,borderRadius:10,background:"#e85d2c",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:"#fff",letterSpacing:"0.05em",fontFamily:"'Barlow Condensed',sans-serif",flexShrink:0}}>
+          {club.shortName.slice(0,3)}
+        </div>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:4}}>
+            <Badge label={club.shortName} color="#7c8cf8" />
+            <Badge label={club.region}    color="var(--text-faint)" />
+            {!club.active && <Badge label="Inactive" color="#f87171" />}
+          </div>
+          <div style={{display:"flex",gap:16,fontSize:12,color:"var(--text-muted)",flexWrap:"wrap"}}>
+            <span>👥 {activeMembers.length} active member{activeMembers.length!==1?"s":""}</span>
+            {club.founded && <span>📅 Founded {fmtDate(club.founded)}</span>}
+            {club.contactEmail && <span>✉️ {club.contactEmail}</span>}
+            {club.website && <a href={club.website} target="_blank" rel="noopener noreferrer" style={{color:"#60a5fa",textDecoration:"none"}}>🔗 Website</a>}
+          </div>
+        </div>
+        {canManage && !editMode && (
+          <button style={{...btnS,padding:"7px 14px",fontSize:12}} onClick={()=>setEditMode(true)}>✏️ Edit</button>
+        )}
+      </div>
+
+      {/* Tab bar */}
+      <div style={{display:"flex",gap:0,borderBottom:"1px solid var(--border)",marginBottom:20,overflowX:"auto"}}>
+        {uniqueTabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={tabStyle(t)}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── INFO TAB ── */}
+      {tab==="info" && (
+        <div>
+          {editMode ? (
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16}}>
+                <Field label="Club Name">
+                  <input style={errInp(editFe.name)} value={editForm.name}
+                    onChange={e=>{setEditForm(f=>({...f,name:e.target.value}));setEditFe(p=>({...p,name:false}));}} />
+                </Field>
+                <Field label="Short Name">
+                  <input style={errInp(editFe.shortName)} value={editForm.shortName}
+                    onChange={e=>{setEditForm(f=>({...f,shortName:e.target.value.toUpperCase()}));setEditFe(p=>({...p,shortName:false}));}}
+                    maxLength={6} />
+                </Field>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                <Field label="Website">
+                  <input style={inp} type="url" value={editForm.website} onChange={e=>setEditForm(f=>({...f,website:e.target.value}))} placeholder="https://…" />
+                </Field>
+                <Field label="Contact Email">
+                  <input style={inp} type="email" value={editForm.contactEmail} onChange={e=>setEditForm(f=>({...f,contactEmail:e.target.value}))} />
+                </Field>
+              </div>
+              <Field label="Description">
+                <textarea style={{...inp,height:80,resize:"vertical"}} value={editForm.description} onChange={e=>setEditForm(f=>({...f,description:e.target.value}))} />
+              </Field>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
+                <button style={btnS} onClick={()=>{setEditMode(false);setEditFe({});}}>Cancel</button>
+                <button style={btnP} onClick={saveEdit}>Save Changes</button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {club.description && (
+                <p style={{color:"var(--text-second)",fontSize:14,lineHeight:1.6,marginTop:0,marginBottom:20}}>{club.description}</p>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <InfoRow label="District"      value={club.region||"—"} />
+                <InfoRow label="Founded"       value={club.founded?fmtDate(club.founded):"—"} />
+                <InfoRow label="Contact Email" value={club.contactEmail||"—"} />
+                <InfoRow label="Website"       value={club.website||"—"} />
+                <InfoRow label="Active Members" value={activeMembers.length} />
+                <InfoRow label="Matches Hosted" value={hostMatches.length} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MEMBERS TAB ── */}
+      {tab==="members" && (
+        <div>
+          {/* Role legend */}
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+            {CLUB_ROLES.map(r=>(
+              <span key={r} style={{display:"flex",alignItems:"center",gap:4,fontSize:12,color:"var(--text-faint)"}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:clubRoleColor(r),display:"inline-block"}} />{r}
+              </span>
+            ))}
+            <span style={{fontSize:12,color:"var(--text-faint)",marginLeft:8}}>· President can manage roles · Secretary can approve/reject applications</span>
+          </div>
+
+          {/* All members (active + suspended) */}
+          {(club.members||[]).length===0 && <p style={{color:"var(--text-faint)",fontSize:14}}>No members yet.</p>}
+          {(club.members||[]).map(m=>{
+            const u = users.find(u=>u.id===m.userId);
+            if (!u) return null;
+            const isSelf = m.userId === currentUser.id;
+            const isThisPresident = m.role==="president";
+            const canChangeRole = isPresident && !isSelf;
+            const canRemove = isPresident && !isSelf;
+
+            return (
+              <div key={m.userId} style={{
+                display:"flex",alignItems:"center",gap:12,padding:"10px 0",
+                borderBottom:"1px solid var(--border)",
+                opacity: m.status==="suspended" ? 0.5 : 1
+              }}>
+                <div style={{width:34,height:34,borderRadius:"50%",background:"#e85d2c",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",flexShrink:0}}>{u.name.charAt(0)}</div>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                    <span style={{color:"var(--text-primary)",fontWeight:600,fontSize:14}}>{u.name}</span>
+                    {isSelf && <span style={{fontSize:11,color:"var(--text-faint)"}}>(you)</span>}
+                    <Badge label={m.role} color={clubRoleColor(m.role)} />
+                    {m.status==="suspended" && <Badge label="Suspended" color="#f87171" />}
+                    {u.certification!=="None" && <Badge label={u.certification} color={certColor(u.certification)} />}
+                  </div>
+                  <div style={{fontSize:12,color:"var(--text-faint)",marginTop:2}}>
+                    Member since {fmtDate(m.since)} · {u.region||"—"}
+                  </div>
+                </div>
+
+                {canManage && (
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                    {/* Role select — only president can change roles */}
+                    {canChangeRole && (
+                      <select
+                        style={{...inp,width:110,padding:"5px 8px",fontSize:12}}
+                        value={m.role}
+                        onChange={e=>setMemberRole(m.userId,e.target.value)}
+                      >
+                        {CLUB_ROLES.map(r=><option key={r} value={r}>{r}</option>)}
+                      </select>
+                    )}
+                    {m.status==="active" && canRemove && (
+                      <button style={{...btnD,padding:"4px 9px",fontSize:11}} onClick={()=>suspendMember(m.userId)}>Suspend</button>
+                    )}
+                    {m.status==="suspended" && canRemove && (
+                      <button style={{...btnS,padding:"4px 9px",fontSize:11}} onClick={()=>reinstateMember(m.userId)}>Reinstate</button>
+                    )}
+                    {canRemove && (
+                      <button style={{...btnD,padding:"4px 9px",fontSize:11}} onClick={()=>removeMember(m.userId)}>✕</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── APPLICATIONS TAB ── */}
+      {tab==="apps" && canManage && (
+        <div>
+          {pendingApps.length===0 && <p style={{color:"var(--text-faint)",fontSize:14}}>No pending membership applications.</p>}
+          {pendingApps.map(app=>{
+            const applicant = users.find(u=>u.id===app.userId);
+            const isReviewing = reviewingId===app.id;
+            return (
+              <div key={app.id} style={{background:"var(--surface2)",border:"1px solid var(--border2)",borderRadius:10,overflow:"hidden",marginBottom:10}}>
+                <div style={{padding:"14px 18px",display:"flex",gap:14,alignItems:"center"}}>
+                  <div style={{width:36,height:36,borderRadius:"50%",background:"#e85d2c",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",flexShrink:0}}>
+                    {(applicant?.name||app.userName||"?").charAt(0)}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,color:"var(--text-primary)",fontSize:14,marginBottom:2}}>{applicant?.name||app.userName}</div>
+                    <div style={{fontSize:12,color:"var(--text-faint)",display:"flex",gap:12,flexWrap:"wrap"}}>
+                      <span>Cert: {applicant?.certification||"—"}</span>
+                      <span>District: {applicant?.region||"—"}</span>
+                      <span>Applied: {fmtDate(app.date)}</span>
+                    </div>
+                    {app.note&&<div style={{marginTop:6,fontSize:13,color:"var(--text-muted)",fontStyle:"italic"}}>&ldquo;{app.note}&rdquo;</div>}
+                  </div>
+                  {!isReviewing && (
+                    <div style={{display:"flex",gap:8}}>
+                      <button style={{...btnP,padding:"7px 14px",fontSize:12,background:"#16a34a"}} onClick={()=>{setReviewingId(app.id);setReviewNote("");}}>Approve</button>
+                      <button style={{...btnD,padding:"7px 14px",fontSize:12}} onClick={()=>{setReviewingId(app.id);setReviewNote("");}}>Reject</button>
+                    </div>
+                  )}
+                </div>
+                {isReviewing && (
+                  <div style={{padding:"12px 18px",borderTop:"1px solid var(--border)",background:"var(--surface)"}}>
+                    <Field label="Note (optional)">
+                      <input style={inp} value={reviewNote} onChange={e=>setReviewNote(e.target.value)} placeholder="Optional note for the applicant…" />
+                    </Field>
+                    <div style={{display:"flex",gap:8,marginTop:4}}>
+                      <button style={{...btnP,background:"#16a34a",padding:"8px 16px",fontSize:13}} onClick={()=>approveApp(app)}>✓ Confirm Approve</button>
+                      <button style={{...btnD,padding:"8px 16px",fontSize:13}} onClick={()=>rejectApp(app)}>✕ Confirm Reject</button>
+                      <button style={{...btnS,padding:"8px 12px",fontSize:13}} onClick={()=>setReviewingId(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Past apps */}
+          {(applications||[]).filter(a=>a.type==="club_membership"&&a.clubId===club.id&&a.status!=="pending").length>0 && (
+            <div style={{marginTop:20}}>
+              <div style={{fontSize:11,fontWeight:700,color:"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Past Decisions</div>
+              {(applications||[]).filter(a=>a.type==="club_membership"&&a.clubId===club.id&&a.status!=="pending").map(app=>(
+                <div key={app.id} style={{padding:"8px 0",borderBottom:"1px solid var(--border)",fontSize:13,display:"flex",gap:10,alignItems:"center"}}>
+                  <Badge label={app.status} color={app.status==="approved"?"#4ade80":"#f87171"} />
+                  <span style={{color:"var(--text-primary)"}}>{app.userName}</span>
+                  <span style={{color:"var(--text-faint)",fontSize:12}}>by {app.reviewedBy} · {fmtDate(app.reviewedDate)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MATCHES TAB ── */}
+      {tab==="matches" && (
+        <div>
+          {hostMatches.length===0 && <p style={{color:"var(--text-faint)",fontSize:14}}>No matches hosted by this club yet.</p>}
+          {hostMatches.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(m=>(
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+              <div style={{flex:1}}>
+                <div style={{color:"var(--text-primary)",fontWeight:600,fontSize:14,marginBottom:2}}>{m.name}</div>
+                <div style={{fontSize:12,color:"var(--text-faint)",display:"flex",gap:12,flexWrap:"wrap"}}>
+                  <span>📅 {fmtDate(m.date)}</span>
+                  <span>🎯 {m.stages} stages</span>
+                  <span>{m.assignments.length} RO{m.assignments.length!==1?"s":""}</span>
+                </div>
+              </div>
+              <Badge label={m.level}  color="#7c8cf8" />
+              <Badge label={m.status} color={statusColor(m.status)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOCUMENTATION PAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DocsPage({ docs, setDocs }) {
+  const { currentUser } = useAuth();
+  const admin = isAdmin(currentUser);
+
+  const [search,      setSearch]      = useState("");
+  const [catFilter,   setCatFilter]   = useState("All");
+  const [sortCol,     setSortCol]     = useState("uploadDate");
+  const [sortDir,     setSortDir]     = useState("desc");
+  const [showUpload,  setShowUpload]  = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);   // { name, ext, size, dataUrl }
+  const [uploadForm,  setUploadForm]  = useState({ category:"NROI", description:"" });
+  const [uploadFe,    setUploadFe]    = useState({});
+  const [dragOver,    setDragOver]    = useState(false);
+  const fileInputRef = React.useRef(null);
+
+  // ── Filtering + sorting ──────────────────────────────────────────────────
+  const catCounts = React.useMemo(() => {
+    const c = { All: docs.length };
+    DOC_CATEGORIES.forEach(k => { c[k] = docs.filter(d=>d.category===k).length; });
+    return c;
+  }, [docs]);
+
+  const filtered = React.useMemo(() => {
+    const q = search.toLowerCase();
+    return docs
+      .filter(d =>
+        (catFilter==="All" || d.category===catFilter) &&
+        (d.name.toLowerCase().includes(q) ||
+         (d.description||"").toLowerCase().includes(q) ||
+         d.uploadedByName.toLowerCase().includes(q))
+      )
+      .sort((a, b) => {
+        let av = a[sortCol]??"", bv = b[sortCol]??"";
+        if (sortCol==="fileSize") { av=a.fileSize||0; bv=b.fileSize||0; }
+        const cmp = typeof av==="number" ? av-bv : String(av).localeCompare(String(bv));
+        return sortDir==="asc" ? cmp : -cmp;
+      });
+  }, [docs, search, catFilter, sortCol, sortDir]);
+
+  function toggleSort(col) {
+    if (sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  }
+
+  // ── File reading (FileReader → dataUrl) ─────────────────────────────────
+  function readFile(file) {
+    const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve({ name:file.name, ext, size:file.size, dataUrl:e.target.result });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function acceptFile(file) {
+    if (!file) return;
+    const parsed = await readFile(file);
+    setPendingFile(parsed);
+    setUploadFe({});
+  }
+
+  // ── Upload submit ────────────────────────────────────────────────────────
+  function submitUpload() {
+    const errs = {};
+    if (!pendingFile)          errs.file     = true;
+    if (!uploadForm.category)  errs.category = true;
+    if (Object.keys(errs).length) { setUploadFe(errs); return; }
+    setDocs(prev => [{
+      id: "d"+Date.now(),
+      name: pendingFile.name,
+      category: uploadForm.category,
+      description: uploadForm.description.trim(),
+      fileType: pendingFile.ext,
+      fileSize: pendingFile.size,
+      uploadedByName: currentUser.name,
+      uploadDate: new Date().toISOString().slice(0,10),
+      dataUrl: pendingFile.dataUrl,
+    }, ...prev]);
+    setPendingFile(null);
+    setUploadForm({ category:"NROI", description:"" });
+    setUploadFe({});
+    setShowUpload(false);
+  }
+
+  // ── Download ─────────────────────────────────────────────────────────────
+  function downloadDoc(doc) {
+    if (!doc.dataUrl) return;
+    const a = document.createElement("a");
+    a.href = doc.dataUrl;
+    a.download = doc.name;
+    a.click();
+  }
+
+  // ── Delete ───────────────────────────────────────────────────────────────
+  function deleteDoc(id) {
+    if (!window.confirm("Delete this document? This cannot be undone.")) return;
+    setDocs(prev => prev.filter(d=>d.id!==id));
+  }
+
+  // ── Drag-and-drop ────────────────────────────────────────────────────────
+  function onDrop(e) {
+    e.preventDefault(); setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) acceptFile(file);
+  }
+
+  // ── Sortable column header ────────────────────────────────────────────────
+  function TH({ col, label, width, right }) {
+    const active = sortCol===col;
+    return (
+      <th onClick={()=>toggleSort(col)} style={{
+        padding:"10px 14px", textAlign:right?"right":"left", fontSize:11, fontWeight:700,
+        color:"var(--text-faint)", textTransform:"uppercase", letterSpacing:"0.07em",
+        borderBottom:"1px solid var(--border)", cursor:"pointer", whiteSpace:"nowrap",
+        userSelect:"none", width,
+      }}>
+        {label}
+        <span style={{marginLeft:4, fontSize:10, color:active?"#e85d2c":"var(--text-faint)"}}>
+          {active ? (sortDir==="asc"?"▲":"▼") : "⇅"}
+        </span>
+      </th>
+    );
+  }
+
+  return (
+    <div style={{padding:"28px 32px", maxWidth:1060}}>
+
+      {/* ── Page header ── */}
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24}}>
+        <div>
+          <h1 style={{margin:"0 0 4px", fontSize:26, fontWeight:800, color:"var(--text-primary)",
+            fontFamily:"'Barlow Condensed',sans-serif", letterSpacing:"0.04em"}}>Documentation</h1>
+          <p style={{margin:0, color:"var(--text-muted)", fontSize:14}}>
+            {docs.length} document{docs.length!==1?"s":""} · official rules, handbooks and reference materials
+          </p>
+        </div>
+        {admin && (
+          <button style={{...btnP, padding:"10px 18px"}}
+            onClick={()=>{ setShowUpload(s=>!s); setPendingFile(null); setUploadFe({}); }}>
+            {showUpload ? "✕ Cancel" : "↑ Upload Document"}
+          </button>
+        )}
+      </div>
+
+      {/* ── Upload panel (admin only) ── */}
+      {admin && showUpload && (
+        <div style={{background:"var(--surface2)", border:"1px solid var(--border)",
+          borderRadius:10, padding:"20px 24px", marginBottom:24}}>
+
+          {/* Drop zone / file preview */}
+          {!pendingFile ? (
+            <div
+              onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+              onDragLeave={()=>setDragOver(false)}
+              onDrop={onDrop}
+              onClick={()=>fileInputRef.current?.click()}
+              style={{
+                border:`2px dashed ${dragOver?"#e85d2c":uploadFe.file?"#f87171":"var(--border2)"}`,
+                borderRadius:8, padding:"30px 20px", textAlign:"center", cursor:"pointer",
+                background: dragOver?"#e85d2c08":uploadFe.file?"#f8717108":"var(--surface)",
+                marginBottom:16, transition:"border-color 0.15s, background 0.15s",
+              }}
+            >
+              <div style={{fontSize:28, marginBottom:6}}>📎</div>
+              <div style={{color:"var(--text-primary)", fontWeight:600, fontSize:14, marginBottom:3}}>
+                Click to browse or drag &amp; drop a file
+              </div>
+              <div style={{color:"var(--text-faint)", fontSize:12}}>Any file type — PDF, Word, Excel, images…</div>
+              {uploadFe.file && <div style={{color:"#f87171", fontSize:12, marginTop:6}}>Please select a file.</div>}
+              <input ref={fileInputRef} type="file" style={{display:"none"}}
+                onChange={e=>acceptFile(e.target.files?.[0])} />
+            </div>
+          ) : (
+            <div style={{display:"flex", alignItems:"center", gap:12, padding:"12px 14px",
+              background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, marginBottom:16}}>
+              <div style={{
+                width:38, height:38, borderRadius:6, flexShrink:0,
+                background:docTypeColor(pendingFile.ext)+"22",
+                border:`1px solid ${docTypeColor(pendingFile.ext)}55`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:12, fontWeight:800, color:docTypeColor(pendingFile.ext),
+                textTransform:"uppercase", fontFamily:"'Barlow Condensed',sans-serif",
+              }}>.{pendingFile.ext}</div>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{color:"var(--text-primary)", fontWeight:600, fontSize:13,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{pendingFile.name}</div>
+                <div style={{color:"var(--text-faint)", fontSize:11, marginTop:1}}>{fmtFileSize(pendingFile.size)}</div>
+              </div>
+              <button onClick={()=>setPendingFile(null)}
+                style={{background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>×</button>
+            </div>
+          )}
+
+          {/* Category + description */}
+          <div style={{display:"grid", gridTemplateColumns:"150px 1fr", gap:16, marginBottom:16}}>
+            <Field label="Category">
+              <select style={errInp(uploadFe.category)} value={uploadForm.category}
+                onChange={e=>{setUploadForm(f=>({...f,category:e.target.value}));setUploadFe(p=>({...p,category:false}));}}>
+                {DOC_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+            <Field label="Description" hint="Optional — shown in the document table">
+              <input style={inp} value={uploadForm.description}
+                onChange={e=>setUploadForm(f=>({...f,description:e.target.value}))}
+                placeholder="e.g. Current IPSC rulebook effective January 2026" />
+            </Field>
+          </div>
+
+          <div style={{display:"flex", gap:10, justifyContent:"flex-end"}}>
+            <button style={btnS} onClick={()=>{setShowUpload(false);setPendingFile(null);setUploadFe({});}}>Cancel</button>
+            <button style={{...btnP, opacity:pendingFile?1:0.45}} onClick={submitUpload} disabled={!pendingFile}>
+              ↑ Upload
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Category filter chips + search ── */}
+      <div style={{display:"flex", gap:8, marginBottom:16, flexWrap:"wrap", alignItems:"center"}}>
+        {["All",...DOC_CATEGORIES].map(cat=>{
+          const active = catFilter===cat;
+          const color  = cat==="All" ? "#e85d2c" : docCatColor(cat);
+          return (
+            <button key={cat} onClick={()=>setCatFilter(cat)} style={{
+              padding:"5px 14px", borderRadius:20, fontSize:12, fontWeight:600,
+              cursor:"pointer", border:`1px solid ${active?color:"var(--border)"}`,
+              background: active ? color+"22" : "var(--surface2)",
+              color: active ? color : "var(--text-muted)",
+              transition:"all 0.12s",
+            }}>
+              {cat}
+              <span style={{opacity:0.7, marginLeft:5}}>({catCounts[cat]||0})</span>
+            </button>
+          );
+        })}
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Search documents…"
+          style={{...inp, flex:1, minWidth:160, padding:"6px 12px", fontSize:13}} />
+      </div>
+
+      {/* ── Document table ── */}
+      <div style={{background:"var(--surface2)", border:"1px solid var(--border)", borderRadius:10, overflow:"hidden"}}>
+        {filtered.length===0 ? (
+          <div style={{textAlign:"center", padding:"60px 20px", color:"var(--text-faint)", fontSize:14}}>
+            {docs.length===0 ? "No documents have been uploaded yet." : "No documents match your search."}
+          </div>
+        ) : (
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%", borderCollapse:"collapse", minWidth:700}}>
+              <thead>
+                <tr style={{background:"var(--surface3)"}}>
+                  <TH col="category"       label="Category"    width={100} />
+                  <TH col="name"           label="File Name"               />
+                  <TH col="fileType"       label="Type"        width={72}  />
+                  <TH col="description"    label="Description"             />
+                  <TH col="fileSize"       label="Size"        width={80} right />
+                  <TH col="uploadedByName" label="Uploaded By" width={130} />
+                  <TH col="uploadDate"     label="Date"        width={110} />
+                  <th style={{width:admin?116:90, borderBottom:"1px solid var(--border)"}} />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((doc, i) => {
+                  const rowBg = i%2===0 ? "transparent" : "var(--surface3)";
+                  return (
+                    <tr key={doc.id}
+                      style={{background:rowBg}}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--surface)"}
+                      onMouseLeave={e=>e.currentTarget.style.background=rowBg}
+                    >
+                      {/* Category */}
+                      <td style={{padding:"11px 14px", whiteSpace:"nowrap"}}>
+                        <Badge label={doc.category} color={docCatColor(doc.category)} />
+                      </td>
+
+                      {/* File name */}
+                      <td style={{padding:"11px 14px", maxWidth:220}}>
+                        <div style={{color:"var(--text-primary)", fontWeight:600, fontSize:13,
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
+                          title={doc.name}>{doc.name}</div>
+                      </td>
+
+                      {/* File type badge */}
+                      <td style={{padding:"11px 14px"}}>
+                        <span style={{
+                          display:"inline-block", padding:"2px 7px", borderRadius:5,
+                          fontSize:11, fontWeight:800, textTransform:"uppercase",
+                          letterSpacing:"0.04em", fontFamily:"'Barlow Condensed',sans-serif",
+                          background:docTypeColor(doc.fileType)+"22",
+                          color:docTypeColor(doc.fileType),
+                          border:`1px solid ${docTypeColor(doc.fileType)}44`,
+                        }}>.{doc.fileType||"?"}</span>
+                      </td>
+
+                      {/* Description */}
+                      <td style={{padding:"11px 14px", maxWidth:260}}>
+                        {doc.description
+                          ? <div style={{color:"var(--text-second)", fontSize:12,
+                              overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
+                              title={doc.description}>{doc.description}</div>
+                          : <span style={{color:"var(--text-faint)", fontStyle:"italic", fontSize:12}}>—</span>}
+                      </td>
+
+                      {/* Size */}
+                      <td style={{padding:"11px 14px", textAlign:"right",
+                        color:"var(--text-faint)", fontSize:12, whiteSpace:"nowrap"}}>
+                        {fmtFileSize(doc.fileSize)}
+                      </td>
+
+                      {/* Uploaded by */}
+                      <td style={{padding:"11px 14px", color:"var(--text-muted)", fontSize:12, whiteSpace:"nowrap"}}>
+                        {doc.uploadedByName}
+                      </td>
+
+                      {/* Upload date */}
+                      <td style={{padding:"11px 14px", color:"var(--text-faint)", fontSize:12, whiteSpace:"nowrap"}}>
+                        {fmtDate(doc.uploadDate)}
+                      </td>
+
+                      {/* Actions */}
+                      <td style={{padding:"11px 14px"}}>
+                        <div style={{display:"flex", gap:6, justifyContent:"flex-end"}}>
+                          <button
+                            onClick={()=>downloadDoc(doc)}
+                            disabled={!doc.dataUrl}
+                            style={{...btnS, padding:"5px 11px", fontSize:12,
+                              opacity:doc.dataUrl?1:0.4, cursor:doc.dataUrl?"pointer":"default"}}
+                          >↓ Download</button>
+                          {admin && (
+                            <button onClick={()=>deleteDoc(doc.id)}
+                              style={{...btnD, padding:"5px 9px", fontSize:12}}
+                              title="Delete document">✕</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Row count footer */}
+      {filtered.length>0 && filtered.length!==docs.length && (
+        <div style={{textAlign:"right", marginTop:8, fontSize:12, color:"var(--text-faint)"}}>
+          Showing {filtered.length} of {docs.length} documents
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POINTS LEDGER
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2620,9 +3730,12 @@ function PointsPage({ users, setUsers, matches }) {
   const [adjustAmt,    setAdjustAmt]    = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustLog,    setAdjustLog]    = useState([]);
+  const [maintenanceId,setMaintenanceId]= useState(null);  // expanded user in maintenance table
+  const [ledgerFilter, setLedgerFilter] = useState("all"); // "all" | userId
 
-  const sorted = [...users].filter(u=>u.active).sort((a,b)=>b.points-a.points);
-  const max    = sorted[0]?.points||1;
+  const thisYear = new Date().getFullYear().toString();
+  const sorted   = [...users].filter(u=>u.active).sort((a,b)=>b.points-a.points);
+  const max      = sorted[0]?.points||1;
 
   function applyAdjust() {
     const amt=parseInt(adjustAmt);
@@ -2634,26 +3747,161 @@ function PointsPage({ users, setUsers, matches }) {
     setAdjustId(""); setAdjustAmt(""); setAdjustReason("");
   }
 
-  // Build ledger from matches
-  const ledger = [];
+  // Build ledger from completed matches
+  const matchLedger = [];
   matches.forEach(m=>{
     if (m.status!=="completed") return;
     m.assignments.forEach(a=>{
       const ro=users.find(u=>u.id===a.roId);
-      if (ro) ledger.push({ roId:a.roId, name:ro.name, matchName:m.name, date:m.date, role:a.role, amt:a.pointsAwarded });
+      if (ro) matchLedger.push({ roId:a.roId, name:ro.name, matchName:m.name, matchLevel:m.level, date:m.date, role:a.role, amt:a.pointsAwarded });
     });
   });
-  adjustLog.forEach(e=>ledger.push({roId:e.roId,name:e.roName,matchName:"Manual",date:e.date,role:"Adj.",amt:e.amt,reason:e.reason}));
-  ledger.sort((a,b)=>b.date.localeCompare(a.date));
+  adjustLog.forEach(e=>matchLedger.push({roId:e.roId,name:e.roName,matchName:"Manual adjustment",matchLevel:"—",date:e.date,role:"Adj.",amt:e.amt,reason:e.reason}));
+  matchLedger.sort((a,b)=>b.date.localeCompare(a.date));
+
+  const visibleLedger = ledgerFilter==="all" ? matchLedger : matchLedger.filter(e=>e.roId===ledgerFilter);
+
+  // Compute yearly point totals per user (for maintenance table)
+  const yearlyMap = React.useMemo(()=>{
+    const map = {};
+    users.forEach(u=>{ map[u.id] = computeYearlyPoints(u.id, matches); });
+    return map;
+  },[users, matches]);
+
+  // All years that appear in the data
+  const allYears = React.useMemo(()=>{
+    const ys = new Set();
+    Object.values(yearlyMap).forEach(byYear=>Object.keys(byYear).forEach(y=>ys.add(y)));
+    return [...ys].sort((a,b)=>b.localeCompare(a));
+  },[yearlyMap]);
+
+  // Maintenance status for a user in a given year
+  function maintenanceStatus(user, year) {
+    const cert = user.certification;
+    if (cert==="None"||cert==="RO-P"||cert==="Admin") return null; // no maintenance req
+    const entries = yearlyMap[user.id]?.[year]?.entries || [];
+    return checkAnnualMaintenance(cert, entries);
+  }
+
+  const certifiedUsers = users.filter(u=>u.active && ["RO","CRO","RM"].includes(u.certification));
 
   return (
-    <div style={{padding:"28px 32px",maxWidth:900}}>
+    <div style={{padding:"28px 32px",maxWidth:960}}>
       <h1 style={{margin:"0 0 6px",fontSize:26,fontWeight:800,color:"var(--text-primary)",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:"0.04em"}}>Points Ledger</h1>
-      <p style={{margin:"0 0 28px",color:"var(--text-muted)",fontSize:14}}>RO activity points earned through match assignments.</p>
+      <p style={{margin:"0 0 28px",color:"var(--text-muted)",fontSize:14}}>
+        RO activity points per NROI Handbook 2026 — 1pt L1, 2pt L2, 3pt L3, 4pt L4, 5pt L5.
+        Points are tracked both cumulatively and year-by-year for annual maintenance.
+      </p>
 
-      {/* Leaderboard */}
+      {/* ── Annual Maintenance Status ── */}
+      {certifiedUsers.length > 0 && (
+        <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:"18px 22px",marginBottom:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Annual Maintenance Status</div>
+            <div style={{fontSize:11,color:"var(--text-faint)"}}>≥6 pts/year + level qualifier required — per NROI Handbook 2026</div>
+          </div>
+
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
+              <thead>
+                <tr style={{background:"var(--surface3)"}}>
+                  <th style={{padding:"8px 12px",textAlign:"left",fontSize:11,fontWeight:700,color:"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid var(--border)",minWidth:130}}>RO</th>
+                  <th style={{padding:"8px 12px",textAlign:"center",fontSize:11,fontWeight:700,color:"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid var(--border)",width:70}}>Cert</th>
+                  {allYears.slice(0,4).map(y=>(
+                    <th key={y} style={{padding:"8px 12px",textAlign:"center",fontSize:11,fontWeight:700,color:y===thisYear?"#e85d2c":"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid var(--border)",width:100}}>
+                      {y}{y===thisYear?" ★":""}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {certifiedUsers.map((u,ri)=>{
+                  const expanded = maintenanceId===u.id;
+                  return (
+                    <React.Fragment key={u.id}>
+                      <tr
+                        style={{background:ri%2===0?"transparent":"var(--surface3)",cursor:"pointer"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="var(--surface)"}
+                        onMouseLeave={e=>e.currentTarget.style.background=ri%2===0?"transparent":"var(--surface3)"}
+                        onClick={()=>setMaintenanceId(expanded?null:u.id)}
+                      >
+                        <td style={{padding:"10px 12px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{width:28,height:28,borderRadius:"50%",background:"#e85d2c",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff",flexShrink:0}}>{u.name.charAt(0)}</div>
+                            <span style={{color:"var(--text-primary)",fontWeight:600,fontSize:13}}>{u.name}</span>
+                          </div>
+                        </td>
+                        <td style={{padding:"10px 12px",textAlign:"center"}}>
+                          <Badge label={u.certification} color={certColor(u.certification)} />
+                        </td>
+                        {allYears.slice(0,4).map(y=>{
+                          const status = maintenanceStatus(u,y);
+                          const yearPts = yearlyMap[u.id]?.[y]?.total||0;
+                          if (!status) return <td key={y} style={{padding:"10px 12px",textAlign:"center",color:"var(--text-faint)",fontSize:12}}>—</td>;
+                          const pass = status.totalPass && status.qualPass;
+                          return (
+                            <td key={y} style={{padding:"10px 12px",textAlign:"center"}}>
+                              <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                                <span style={{fontSize:16}}>{pass?"✅":"❌"}</span>
+                                <span style={{fontSize:11,color:pass?"#4ade80":"#f87171",fontWeight:700}}>{yearPts}pt</span>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {expanded && (
+                        <tr>
+                          <td colSpan={2+Math.min(allYears.length,4)} style={{padding:"0 12px 12px",background:"var(--surface)"}}>
+                            <div style={{padding:"12px 14px",background:"var(--surface2)",borderRadius:8,border:"1px solid var(--border)"}}>
+                              <div style={{fontSize:11,fontWeight:700,color:"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>
+                                {u.name} — Yearly breakdown
+                              </div>
+                              {allYears.slice(0,4).map(y=>{
+                                const status = maintenanceStatus(u,y);
+                                if (!status) return null;
+                                const entries = yearlyMap[u.id]?.[y]?.entries||[];
+                                return (
+                                  <div key={y} style={{marginBottom:12}}>
+                                    <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:6}}>
+                                      <span style={{fontWeight:700,color:"var(--text-primary)",fontSize:13}}>{y}</span>
+                                      <span style={{fontSize:12,color:status.totalPass?"#4ade80":"#f87171"}}>{status.total}pt / 6pt min {status.totalPass?"✓":"✗"}</span>
+                                      <span style={{fontSize:11,color:"var(--text-faint)"}}>·</span>
+                                      <span style={{fontSize:11,color:status.qualPass?"#4ade80":"#f87171"}}>{status.qualLabel} {status.qualPass?"✓":"✗"}</span>
+                                    </div>
+                                    {entries.length===0
+                                      ? <div style={{fontSize:12,color:"var(--text-faint)",fontStyle:"italic"}}>No activity this year.</div>
+                                      : entries.map((e,ei)=>(
+                                          <div key={ei} style={{display:"flex",gap:10,fontSize:12,color:"var(--text-muted)",paddingLeft:8,marginBottom:3}}>
+                                            <span style={{color:"var(--text-faint)",minWidth:85}}>{fmtDate(e.date)}</span>
+                                            <Badge label={e.role} color={certColor(e.role)} />
+                                            <span style={{color:"var(--text-second)"}}>{e.matchName}</span>
+                                            <Badge label={e.matchLevel} color="#7c8cf8" />
+                                            <span style={{color:"#e85d2c",fontWeight:700,marginLeft:"auto"}}>+{e.pts}pt</span>
+                                          </div>
+                                        ))
+                                    }
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{marginTop:10,fontSize:11,color:"var(--text-faint)"}}>
+            Click a row to expand yearly detail. RO: min 1×L2+; CRO: min 1×L3+; RM: min 2×L3+.
+          </div>
+        </div>
+      )}
+
+      {/* ── Cumulative Leaderboard ── */}
       <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:"18px 22px",marginBottom:24}}>
-        <div style={{fontSize:12,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14}}>Leaderboard</div>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14}}>Cumulative Leaderboard</div>
         {sorted.map((u,i)=>(
           <div key={u.id} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
             <div style={{width:22,textAlign:"right",color:"var(--text-faint)",fontSize:12,fontWeight:700}}>{i+1}</div>
@@ -2669,7 +3917,7 @@ function PointsPage({ users, setUsers, matches }) {
         ))}
       </div>
 
-      {/* Manual adjustment (admin only) */}
+      {/* ── Manual adjustment (admin only) ── */}
       {adminAccess && (
         <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:"18px 22px",marginBottom:24}}>
           <div style={{fontSize:12,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14}}>Manual Adjustment</div>
@@ -2682,30 +3930,40 @@ function PointsPage({ users, setUsers, matches }) {
         </div>
       )}
 
-      {/* Ledger table */}
+      {/* ── Activity Log ── */}
       <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
-        <div style={{fontSize:12,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em",padding:"14px 18px",borderBottom:"1px solid var(--border)"}}>Activity Log</div>
-        <table style={{width:"100%",borderCollapse:"collapse"}}>
-          <thead>
-            <tr style={{background:"var(--surface3)"}}>
-              {["RO","Match","Date","Role","Points"].map(h=>(
-                <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid var(--border)"}}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {ledger.map((e,i)=>(
-              <tr key={i} style={{background:i%2===0?"transparent":"var(--surface3)"}}>
-                <td style={{padding:"10px 14px",color:"var(--text-primary)",fontSize:13,fontWeight:600}}>{e.name}</td>
-                <td style={{padding:"10px 14px",color:"var(--text-second)",fontSize:13}}>{e.matchName}</td>
-                <td style={{padding:"10px 14px",color:"var(--text-muted)",fontSize:12}}>{fmtDate(e.date)}</td>
-                <td style={{padding:"10px 14px"}}><Badge label={e.role} color={certColor(e.role)} /></td>
-                <td style={{padding:"10px 14px",color:e.amt>0?"#4ade80":"#f87171",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",fontSize:15}}>{e.amt>0?"+":"-"}{e.amt} pts</td>
+        <div style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",borderBottom:"1px solid var(--border)"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Activity Log</div>
+          <select style={{...inp,width:180,padding:"5px 10px",fontSize:12}} value={ledgerFilter} onChange={e=>setLedgerFilter(e.target.value)}>
+            <option value="all">All ROs</option>
+            {[...users].sort((a,b)=>a.name.localeCompare(b.name)).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+          <span style={{fontSize:11,color:"var(--text-faint)",marginLeft:"auto"}}>{visibleLedger.length} entries</span>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
+            <thead>
+              <tr style={{background:"var(--surface3)"}}>
+                {["RO","Match","Level","Date","Role","Points"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid var(--border)"}}>{h}</th>
+                ))}
               </tr>
-            ))}
-            {ledger.length===0&&<tr><td colSpan={5} style={{padding:"20px 14px",color:"var(--text-faint)",fontSize:13,textAlign:"center"}}>No activity yet.</td></tr>}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {visibleLedger.map((e,i)=>(
+                <tr key={i} style={{background:i%2===0?"transparent":"var(--surface3)"}}>
+                  <td style={{padding:"10px 14px",color:"var(--text-primary)",fontSize:13,fontWeight:600}}>{e.name}</td>
+                  <td style={{padding:"10px 14px",color:"var(--text-second)",fontSize:13}}>{e.matchName}</td>
+                  <td style={{padding:"10px 14px"}}><Badge label={e.matchLevel||"—"} color="#7c8cf8" /></td>
+                  <td style={{padding:"10px 14px",color:"var(--text-muted)",fontSize:12}}>{fmtDate(e.date)}</td>
+                  <td style={{padding:"10px 14px"}}><Badge label={e.role} color={certColor(e.role)} /></td>
+                  <td style={{padding:"10px 14px",color:e.amt>0?"#4ade80":"#f87171",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",fontSize:15}}>{e.amt>0?"+":"-"}{Math.abs(e.amt)} pts</td>
+                </tr>
+              ))}
+              {visibleLedger.length===0&&<tr><td colSpan={6} style={{padding:"20px 14px",color:"var(--text-faint)",fontSize:13,textAlign:"center"}}>No activity yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -2715,21 +3973,155 @@ function PointsPage({ users, setUsers, matches }) {
 // RO CHECKLIST
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RO_UPGRADE_CONFIG = { minPoints: 3, minActiveYears: 0.5, quarantineDays: 180 };
+// ─────────────────────────────────────────────────────────────────────────────
+// NROI HANDBOOK 2026 — points & maintenance rules
+// ─────────────────────────────────────────────────────────────────────────────
 
-function computeROChecklist(user) {
-  const now = new Date();
-  const joinDate = new Date(user.joined);
+// Compute year-by-year point totals for a user from match assignments.
+// `matches` must be passed in; we derive from all completed matches.
+// Returns: { [year]: { total, byRole: { roId, role, matchLevel, pts, date, matchName }[] } }
+function computeYearlyPoints(userId, matches) {
+  const byYear = {};
+  (matches||[]).forEach(m => {
+    if (m.status !== "completed") return;
+    const year = (m.date||"").slice(0,4);
+    if (!year) return;
+    const a = (m.assignments||[]).find(a=>a.roId===userId);
+    if (!a) return;
+    if (!byYear[year]) byYear[year] = { total:0, entries:[] };
+    byYear[year].total += a.pointsAwarded;
+    byYear[year].entries.push({
+      role: a.role,
+      matchLevel: m.level,
+      pts: a.pointsAwarded,
+      date: m.date,
+      matchName: m.name,
+    });
+  });
+  return byYear;
+}
+
+// Check annual maintenance requirement for a certification level.
+// Returns { pass, details } per the handbook:
+//   RO:  ≥6 pts/year, incl. min 1×Level II+ as RO or higher
+//   CRO: ≥6 pts/year, incl. min 1×Level III+ as RO or higher
+//   RM:  ≥6 pts/year, incl. min 2×Level III+ as RO or higher
+const LEVEL_ORDER = ["Level I","Level II","Level III","Level IV","Level V"];
+function meetsLevelOrHigher(matchLevel, minLevel) {
+  return LEVEL_ORDER.indexOf(matchLevel) >= LEVEL_ORDER.indexOf(minLevel);
+}
+const RO_ROLES_COUNTING = ["RO-P","RO","CRO","RM","MD","MD/RM"]; // all RO roles count for maintenance
+
+function checkAnnualMaintenance(cert, yearEntries) {
+  const entries = yearEntries || [];
+  const total   = entries.reduce((s,e)=>s+e.pts, 0);
+  const qualifies = e => RO_ROLES_COUNTING.includes(e.role);
+
+  let qualCount = 0, qualLabel = "", minLevel = "Level I";
+  if (cert === "RO") {
+    minLevel  = "Level II";
+    qualCount = entries.filter(e=>qualifies(e)&&meetsLevelOrHigher(e.matchLevel,minLevel)).length;
+    qualLabel = `≥1×Level II+ match as RO or higher (found ${qualCount})`;
+  } else if (cert === "CRO") {
+    minLevel  = "Level III";
+    qualCount = entries.filter(e=>qualifies(e)&&meetsLevelOrHigher(e.matchLevel,minLevel)).length;
+    qualLabel = `≥1×Level III+ match as RO or higher (found ${qualCount})`;
+  } else if (cert === "RM") {
+    minLevel  = "Level III";
+    qualCount = entries.filter(e=>qualifies(e)&&meetsLevelOrHigher(e.matchLevel,minLevel)).length;
+    qualLabel = `≥2×Level III+ matches as RO or higher (found ${qualCount})`;
+  }
+
+  const minQual = cert==="RM" ? 2 : cert==="CRO"||cert==="RO" ? 1 : 0;
+  return {
+    totalPass:    total >= 6,
+    qualPass:     minQual===0 || qualCount >= minQual,
+    total, qualCount, qualLabel,
+  };
+}
+
+// RO-P → RO promotion checklist (NROI Handbook 2026, p.7)
+// Requirements:
+//   • Current cert is RO-P
+//   • Account active
+//   • Member ≥ 1 year
+//   • Completed IROA Level I seminar and graduated
+//   • Accumulated provisional points: 6 pts as combination of L1+L2+ with min 2×L2
+//   • Profile photo approved
+//   • No quarantine (2 years after a rejected application)
+const RO_UPGRADE_CONFIG = {
+  provisionalMinPts:   6,
+  provisionalMinL2:    2,
+  minMemberYears:      1,
+  quarantineYears:     2,
+};
+
+function computeROChecklist(user, matches) {
+  const now       = new Date();
+  const joinDate  = new Date(user.joined);
   const yearsActive = (now - joinDate) / (1000*60*60*24*365.25);
-  const lastApp = user.lastROApplication ? new Date(user.lastROApplication) : null;
-  const daysSinceApp = lastApp ? (now - lastApp) / (1000*60*60*24) : Infinity;
+  const lastApp   = user.lastROApplication ? new Date(user.lastROApplication) : null;
+  const daysSinceLastApp = lastApp ? (now - lastApp) / (1000*60*60*24) : Infinity;
+
+  // Provisional match points accumulated (as RO-P)
+  const provEntries = (matches||[])
+    .filter(m=>m.status==="completed")
+    .flatMap(m=>(m.assignments||[])
+      .filter(a=>a.roId===user.id && a.role==="RO-P")
+      .map(a=>({ pts:a.pointsAwarded, level:m.level }))
+    );
+  const provTotal = provEntries.reduce((s,e)=>s+e.pts,0);
+  const provL2    = provEntries.filter(e=>meetsLevelOrHigher(e.level,"Level II")).length;
+
+  // IROA Level I seminar completed and graduated
+  const hasLevelI = (user.seminarHistory||[]).some(
+    s=>s.type==="Level I"&&s.graduated&&s.diplomaVerified
+  );
 
   return [
-    { label: `Points ≥ ${RO_UPGRADE_CONFIG.minPoints} (current: ${user.points})`, pass: user.points >= RO_UPGRADE_CONFIG.minPoints },
-    { label: `Active ≥ ${RO_UPGRADE_CONFIG.minActiveYears} years (${yearsActive.toFixed(1)} yrs)`, pass: yearsActive >= RO_UPGRADE_CONFIG.minActiveYears },
-    { label: `No application in last ${RO_UPGRADE_CONFIG.quarantineDays} days`, pass: daysSinceApp >= RO_UPGRADE_CONFIG.quarantineDays },
-    { label: "Current certification: RO-P", pass: user.certification === "RO-P" },
-    { label: "Account active", pass: user.active },
+    {
+      key:"cert",
+      label:"Current certification is RO-P",
+      pass: user.certification==="RO-P",
+    },
+    {
+      key:"active",
+      label:"Account is active",
+      pass: user.active,
+    },
+    {
+      key:"member_age",
+      label:`Member ≥ 1 year (currently ${yearsActive.toFixed(1)} yrs)`,
+      pass: yearsActive >= RO_UPGRADE_CONFIG.minMemberYears,
+    },
+    {
+      key:"photo",
+      label:"Profile photo approved",
+      pass: !!user.profilePhotoApproved,
+    },
+    {
+      key:"seminar",
+      label:"Completed & verified IROA Level I seminar",
+      pass: hasLevelI,
+    },
+    {
+      key:"prov_pts",
+      label:`Provisional points ≥ ${RO_UPGRADE_CONFIG.provisionalMinPts} (earned: ${provTotal})`,
+      pass: provTotal >= RO_UPGRADE_CONFIG.provisionalMinPts,
+      detail: "Points from matches worked as Provisional RO",
+    },
+    {
+      key:"prov_l2",
+      label:`≥ ${RO_UPGRADE_CONFIG.provisionalMinL2}×Level II+ matches as RO-P (count: ${provL2})`,
+      pass: provL2 >= RO_UPGRADE_CONFIG.provisionalMinL2,
+      detail: "Provisional period must include at least 2 Level II or higher matches",
+    },
+    {
+      key:"quarantine",
+      label:`No rejected application in last 2 years`,
+      pass: daysSinceLastApp >= RO_UPGRADE_CONFIG.quarantineYears * 365,
+      detail: lastApp ? `Last application: ${lastApp.toLocaleDateString("en-GB")}` : "No previous application",
+    },
   ];
 }
 
@@ -2984,6 +4376,8 @@ export default function App() {
   const [matchesRaw,  setMatchesRaw]  = useState(seedMatches);
   const [seminars,    setSeminars]    = useState(seedSeminars);
   const [applications,setApplications]= useState([]);
+  const [clubs,       setClubs]       = useState(seedClubs);
+  const [docs,        setDocs]        = useState(seedDocs);
   const [currentUser, setCurrentUser] = useState(null);
   const [page,        setPage]        = useState("dashboard");
   const [regions,     setRegions]     = useState(DEFAULT_REGIONS);
@@ -3034,6 +4428,8 @@ export default function App() {
     { id:"dashboard", label:"Dashboard",      icon:"📊", show:true },
     { id:"ro",        label:"Range Officers", icon:"👥", show:true },
     { id:"matches",   label:"Matches",        icon:"🎯", show:true },
+    { id:"clubs",     label:"Clubs",           icon:"🏛️", show:true },
+    { id:"docs",      label:"Documentation",   icon:"📄", show:true },
     { id:"seminars",  label:"Seminars",       icon:"🎓", show:true },
     { id:"points",    label:"Points Ledger",  icon:"📈", show:true },
     { id:"users",     label:"User Database",  icon:"🛡️", show:canMatch, badge:pendingApps.length>0?pendingApps.length:null },
@@ -3139,11 +4535,13 @@ export default function App() {
           <main style={{marginLeft:228,flex:1,minHeight:"100vh",background:"var(--bg)"}}>
             {page==="dashboard" && <Dashboard users={users} matches={matchesRaw} seminars={seminars} />}
             {page==="ro"        && <ROPage users={users} matches={matchesRaw} regions={regions} />}
-            {page==="matches"   && <MatchesPage users={users} matches={matchesRaw} setMatches={setMatches} regions={regions} />}
+            {page==="matches"   && <MatchesPage users={users} matches={matchesRaw} setMatches={setMatches} regions={regions} clubs={clubs} />}
+            {page==="clubs"     && <ClubsPage users={users} clubs={clubs} setClubs={setClubs} applications={applications} setApplications={setApplications} matches={matchesRaw} regions={regions} />}
+            {page==="docs"      && <DocsPage docs={docs} setDocs={setDocs} />}
             {page==="seminars"  && <SeminarsPage users={users} setUsers={setUsers} seminars={seminars} setSeminars={setSeminars} />}
             {page==="points"    && <PointsPage users={users} setUsers={setUsers} matches={matchesRaw} />}
-            {page==="users"     && canMatch && <UserDatabase users={users} setUsers={setUsers} regions={regions} setRegions={setRegions} applications={applications} setApplications={setApplications} />}
-            {page==="profile"   && <MyProfile users={users} setUsers={setUsers} matches={matchesRaw} seminars={seminars} regions={regions} applications={applications} setApplications={setApplications} />}
+            {page==="users"     && canMatch && <UserDatabase users={users} setUsers={setUsers} regions={regions} setRegions={setRegions} applications={applications} setApplications={setApplications} matches={matchesRaw} />}
+            {page==="profile"   && <MyProfile users={users} setUsers={setUsers} matches={matchesRaw} seminars={seminars} regions={regions} applications={applications} setApplications={setApplications} clubs={clubs} setClubs={setClubs} />}
           </main>
         </div>
       </AuthCtx.Provider>
